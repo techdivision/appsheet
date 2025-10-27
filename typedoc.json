@@ -1,0 +1,25 @@
+{
+  "entryPoints": ["src/index.ts"],
+  "out": "docs/api",
+  "exclude": ["**/*.test.ts", "**/__tests__/**"],
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeInternal": true,
+  "readme": "README.md",
+  "name": "AppSheet TypeScript Library",
+  "plugin": [],
+  "theme": "default",
+  "hideGenerator": true,
+  "includeVersion": true,
+  "sort": ["source-order"],
+  "categorizeByGroup": true,
+  "defaultCategory": "Other",
+  "categoryOrder": [
+    "Client",
+    "Schema Management",
+    "Connection Management",
+    "Types",
+    "Errors",
+    "*"
+  ]
+}

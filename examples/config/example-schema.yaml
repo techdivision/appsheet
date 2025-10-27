@@ -1,0 +1,40 @@
+# Example AppSheet schema configuration
+
+connections:
+  worklog:
+    appId: ${APPSHEET_WORKLOG_APP_ID}
+    applicationAccessKey: ${APPSHEET_WORKLOG_ACCESS_KEY}
+    tables:
+      worklogs:
+        tableName: worklog
+        keyField: id
+        fields:
+          id: string
+          userId: string
+          date: string
+          hours: number
+          description: string
+          projectKey: string
+
+      issues:
+        tableName: extract_issue
+        keyField: key
+        fields:
+          key: string
+          summary: string
+          status: string
+          assignee: string
+
+  hr:
+    appId: ${APPSHEET_HR_APP_ID}
+    applicationAccessKey: ${APPSHEET_HR_ACCESS_KEY}
+    tables:
+      employees:
+        tableName: employees
+        keyField: id
+        fields:
+          id: string
+          name: string
+          email: string
+          department: string
+          hireDate: date
