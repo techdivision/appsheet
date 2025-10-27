@@ -23,7 +23,8 @@ This will generate the documentation and serve it locally in your browser.
 ### Online Documentation
 
 Once published, the documentation will be available at:
-- NPM: https://www.npmjs.com/package/@yourorg/appsheet
+- NPM: https://www.npmjs.com/package/@techdivision/appsheet
+- GitHub: https://github.com/techdivision/appsheet
 - GitHub Pages: (if configured)
 
 ## Technical Conception

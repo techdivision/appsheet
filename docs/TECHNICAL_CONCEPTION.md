@@ -147,7 +147,7 @@ class AppSheetClient {
 ### Verwendungsbeispiel
 
 ```typescript
-import { AppSheetClient } from '@yourorg/appsheet';
+import { AppSheetClient } from '@techdivision/appsheet';
 
 const client = new AppSheetClient({
   appId: 'your-app-id',
@@ -819,7 +819,7 @@ export class DynamicTable<T = Record<string, any>> {
 
 ```typescript
 // src/db/index.ts
-import { SchemaLoader, SchemaManager } from '@yourorg/appsheet';
+import { SchemaLoader, SchemaManager } from '@techdivision/appsheet';
 import * as path from 'path';
 
 // Schema beim Start laden
@@ -1336,32 +1336,32 @@ export function createCLI() {
 
 ```bash
 # 1. Initialisiere leeres Schema
-npx @yourorg/appsheet init
+npx @techdivision/appsheet init
 
 # 2. Generiere Schema durch Introspection
-npx @yourorg/appsheet inspect \
+npx @techdivision/appsheet inspect \
   --app-id "your-app-id" \
   --access-key "your-access-key" \
   --tables "worklog,extract_issue,extract_account" \
   --connection-name worklog
 
 # 3. Füge weitere Connection hinzu
-npx @yourorg/appsheet add-connection hr \
+npx @techdivision/appsheet add-connection hr \
   --app-id "hr-app-id" \
   --access-key "hr-access-key" \
   --tables "employees,departments"
 
 # 4. Füge einzelne Tabelle hinzu
-npx @yourorg/appsheet add-table worklog extract_budget
+npx @techdivision/appsheet add-table worklog extract_budget
 
 # 5. Aktualisiere Tabelle (z.B. nach Schema-Änderungen in AppSheet)
-npx @yourorg/appsheet update-table worklog worklogs
+npx @techdivision/appsheet update-table worklog worklogs
 
 # 6. Validiere Schema
-npx @yourorg/appsheet validate
+npx @techdivision/appsheet validate
 
 # 7. Output als JSON statt YAML
-npx @yourorg/appsheet inspect \
+npx @techdivision/appsheet inspect \
   --app-id "your-app-id" \
   --access-key "your-access-key" \
   --tables "worklog" \
@@ -1428,14 +1428,14 @@ program
 
 ```bash
 # Interactive mode
-npx @yourorg/appsheet interactive
+npx @techdivision/appsheet interactive
 ```
 
 ##### Package.json Bin Entry
 
 ```json
 {
-  "name": "@yourorg/appsheet",
+  "name": "@techdivision/appsheet",
   "bin": {
     "appsheet": "./dist/cli/index.js"
   }
@@ -1467,7 +1467,7 @@ Kombination aus TypeScript-Types und Runtime-Loading für beste Type-Safety:
 
 ```typescript
 // config/schema.ts
-import { SchemaLoader } from '@yourorg/appsheet';
+import { SchemaLoader } from '@techdivision/appsheet';
 
 // TypeScript interfaces für Compile-Time Type-Safety
 export interface Worklog {
@@ -1506,7 +1506,7 @@ In jedem Projekt wird eine zentrale Schema-Datei erstellt:
 
 ```typescript
 // src/schema/tables.ts (im konkreten Projekt)
-import { TableSchema, createTableRegistry } from '@yourorg/appsheet';
+import { TableSchema, createTableRegistry } from '@techdivision/appsheet';
 
 // 1. TypeScript Interfaces für Tabellen-Strukturen
 export interface User {
@@ -1565,7 +1565,7 @@ export const tables = createTableRegistry(tableSchemas);
 
 ```typescript
 // src/services/userService.ts
-import { AppSheetClient } from '@yourorg/appsheet';
+import { AppSheetClient } from '@techdivision/appsheet';
 import { tables, User } from './schema/tables';
 
 const client = new AppSheetClient({
@@ -1683,7 +1683,7 @@ tables:
 
 ```bash
 # CLI Tool in der Library
-npx @yourorg/appsheet generate-types --config appsheet.config.yaml --output src/schema
+npx @techdivision/appsheet generate-types --config appsheet.config.yaml --output src/schema
 ```
 
 Generiert automatisch:
@@ -1815,7 +1815,7 @@ const activeUsers = await usersTable
 
 ```typescript
 // src/db/index.ts (im konkreten MCP-Server Projekt)
-import { AppSheetClient } from '@yourorg/appsheet';
+import { AppSheetClient } from '@techdivision/appsheet';
 import { tableSchemas, tables } from './schema';
 
 // Singleton Client
@@ -1939,7 +1939,7 @@ export class ConnectionManager {
 
 ```typescript
 // src/db/connections.ts
-import { ConnectionManager } from '@yourorg/appsheet';
+import { ConnectionManager } from '@techdivision/appsheet';
 
 // Singleton ConnectionManager
 export const connectionManager = new ConnectionManager();
@@ -1973,7 +1973,7 @@ export function initializeConnections() {
 
 ```typescript
 // src/schema/worklog/tables.ts
-import { createTableRegistry } from '@yourorg/appsheet';
+import { createTableRegistry } from '@techdivision/appsheet';
 
 export interface Worklog {
   id: string;
@@ -2077,7 +2077,7 @@ const departments = await db.hr.departments().findAll();
 
 ```typescript
 // src/db/appFactory.ts
-import { AppSheetClient, createTableRegistry } from '@yourorg/appsheet';
+import { AppSheetClient, createTableRegistry } from '@techdivision/appsheet';
 
 export function createAppConnection<T extends Record<string, any>>(
   config: {

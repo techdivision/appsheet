@@ -14,8 +14,38 @@ A generic TypeScript library for AppSheet CRUD operations, designed for building
 
 ## Installation
 
+### From GitHub (for internal projects)
+
+Install directly from the GitHub repository:
+
 ```bash
-npm install @yourorg/appsheet
+npm install git+ssh://git@github.com:techdivision/appsheet.git
+```
+
+Or specify a specific branch or tag:
+
+```bash
+# Install from a specific branch
+npm install git+ssh://git@github.com:techdivision/appsheet.git#main
+
+# Install from a specific tag/version
+npm install git+ssh://git@github.com:techdivision/appsheet.git#v0.1.0
+```
+
+Add to your `package.json`:
+
+```json
+{
+  "dependencies": {
+    "@techdivision/appsheet": "git+ssh://git@github.com:techdivision/appsheet.git"
+  }
+}
+```
+
+### From npm (when published)
+
+```bash
+npm install @techdivision/appsheet
 ```
 
 ## Quick Start
@@ -42,7 +72,7 @@ This creates `config/appsheet-schema.yaml` with your table definitions.
 ### 2. Use in Your Code
 
 ```typescript
-import { SchemaLoader, SchemaManager } from '@yourorg/appsheet';
+import { SchemaLoader, SchemaManager } from '@techdivision/appsheet';
 
 // Load schema
 const schema = SchemaLoader.fromYaml('./config/appsheet-schema.yaml');
@@ -91,7 +121,7 @@ npx appsheet validate
 For simple use cases without schema files:
 
 ```typescript
-import { AppSheetClient } from '@yourorg/appsheet';
+import { AppSheetClient } from '@techdivision/appsheet';
 
 const client = new AppSheetClient({
   appId: process.env.APPSHEET_APP_ID!,
