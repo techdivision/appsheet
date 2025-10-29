@@ -126,6 +126,7 @@ import { AppSheetClient } from '@techdivision/appsheet';
 const client = new AppSheetClient({
   appId: process.env.APPSHEET_APP_ID!,
   applicationAccessKey: process.env.APPSHEET_ACCESS_KEY!,
+  runAsUserEmail: 'default@example.com',  // Optional: run operations as specific user
 });
 
 // CRUD operations
@@ -135,6 +136,13 @@ const user = await client.findOne('Users', '[Email] = "john@example.com"');
 await client.addOne('Users', { name: 'John', email: 'john@example.com' });
 await client.updateOne('Users', { id: '123', name: 'John Updated' });
 await client.deleteOne('Users', { id: '123' });
+
+// Override runAsUserEmail for specific operation
+await client.add({
+  tableName: 'Users',
+  rows: [{ name: 'Jane' }],
+  properties: { RunAsUserEmail: 'admin@example.com' }
+});
 ```
 
 ## Multi-Instance Support

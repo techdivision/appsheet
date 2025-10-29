@@ -42,6 +42,8 @@ node dist/cli/index.js inspect --help
 - Handles authentication, retries with exponential backoff, and error conversion
 - Base URL: `https://api.appsheet.com/api/v2`
 - All operations require: appId, applicationAccessKey, tableName
+- Optional global `runAsUserEmail` config automatically injected into all requests
+- Per-operation override possible via `properties.RunAsUserEmail`
 
 **DynamicTable** (`src/client/DynamicTable.ts`)
 - Schema-aware table client with runtime validation
@@ -100,7 +102,11 @@ connections:
 
 **Pattern 1: Direct Client**
 ```typescript
-const client = new AppSheetClient({ appId, applicationAccessKey });
+const client = new AppSheetClient({
+  appId,
+  applicationAccessKey,
+  runAsUserEmail: 'user@example.com'  // Optional
+});
 await client.findAll('TableName');
 ```
 

@@ -79,7 +79,30 @@ export class SchemaManager {
   }
 
   /**
-   * Get a table client
+   * Get a type-safe table client.
+   *
+   * Returns a DynamicTable instance for the specified table in the given connection.
+   * The table client provides CRUD operations with runtime validation based on the schema.
+   *
+   * @template T - Type interface for the table rows
+   * @param connectionName - The name of the connection containing the table
+   * @param tableName - The name of the table as defined in the schema
+   * @returns A DynamicTable instance for performing operations on the table
+   * @throws {Error} If the connection or table doesn't exist
+   *
+   * @example
+   * ```typescript
+   * interface Worklog {
+   *   id: string;
+   *   date: string;
+   *   hours: number;
+   *   description: string;
+   * }
+   *
+   * const worklogsTable = db.table<Worklog>('worklog', 'worklogs');
+   * const entries = await worklogsTable.findAll();
+   * await worklogsTable.add([{ id: '1', date: '2025-10-29', hours: 8, description: 'Work' }]);
+   * ```
    */
   table<T = Record<string, any>>(connectionName: string, tableName: string): DynamicTable<T> {
     const connection = this.tableClients.get(connectionName);
@@ -100,14 +123,40 @@ export class SchemaManager {
   }
 
   /**
-   * Get all available connection names
+   * Get all available connection names.
+   *
+   * Returns an array of all connection names defined in the schema.
+   * Useful for iterating over all connections or building dynamic UIs.
+   *
+   * @returns Array of connection names
+   *
+   * @example
+   * ```typescript
+   * const connections = db.getConnections();
+   * console.log('Available connections:', connections);
+   * // Output: ['worklog', 'hr', 'inventory']
+   * ```
    */
   getConnections(): string[] {
     return [...this.tableClients.keys()];
   }
 
   /**
-   * Get all available tables for a connection
+   * Get all available tables for a connection.
+   *
+   * Returns an array of table names that are defined for the specified connection.
+   * Useful for discovering available tables at runtime.
+   *
+   * @param connectionName - The name of the connection
+   * @returns Array of table names for the specified connection
+   * @throws {Error} If the connection doesn't exist
+   *
+   * @example
+   * ```typescript
+   * const tables = db.getTables('worklog');
+   * console.log('Available tables in worklog:', tables);
+   * // Output: ['worklogs', 'issues', 'accounts']
+   * ```
    */
   getTables(connectionName: string): string[] {
     const connection = this.tableClients.get(connectionName);
@@ -118,14 +167,41 @@ export class SchemaManager {
   }
 
   /**
-   * Get the underlying connection manager
+   * Get the underlying connection manager.
+   *
+   * Provides access to the internal ConnectionManager instance for advanced use cases,
+   * such as direct client access or connection management.
+   *
+   * @returns The ConnectionManager instance
+   *
+   * @example
+   * ```typescript
+   * const connManager = db.getConnectionManager();
+   * const health = await connManager.healthCheck();
+   * console.log('Connection health:', health);
+   * ```
    */
   getConnectionManager(): ConnectionManager {
     return this.connectionManager;
   }
 
   /**
-   * Reload schema (useful for hot-reloading)
+   * Reload schema configuration.
+   *
+   * Clears all existing connections and table clients, then reinitializes
+   * them with the new schema. Useful for hot-reloading configuration changes.
+   *
+   * @param schema - The new schema configuration to load
+   *
+   * @example
+   * ```typescript
+   * // Load updated schema
+   * const newSchema = SchemaLoader.fromYaml('./config/appsheet-schema.yaml');
+   * db.reload(newSchema);
+   *
+   * // All table clients now use the new configuration
+   * const table = db.table('worklog', 'worklogs');
+   * ```
    */
   reload(schema: SchemaConfig): void {
     this.tableClients.clear();
@@ -135,7 +211,18 @@ export class SchemaManager {
   }
 
   /**
-   * Get the current schema
+   * Get the current schema configuration.
+   *
+   * Returns the schema configuration that was loaded during initialization.
+   * This is a reference to the internal schema object.
+   *
+   * @returns The current SchemaConfig
+   *
+   * @example
+   * ```typescript
+   * const schema = db.getSchema();
+   * console.log('Loaded connections:', Object.keys(schema.connections));
+   * ```
    */
   getSchema(): SchemaConfig {
     return this.schema;

@@ -33,7 +33,20 @@ import { SchemaConfig, SchemaValidationResult } from '../types';
  */
 export class SchemaLoader {
   /**
-   * Load schema from JSON file
+   * Load schema from a JSON file.
+   *
+   * Reads a JSON file containing the schema configuration and resolves any
+   * environment variables using the ${VAR_NAME} syntax.
+   *
+   * @param filePath - Absolute or relative path to the JSON schema file
+   * @returns Parsed and resolved SchemaConfig
+   * @throws {Error} If file cannot be read or parsed, or if environment variables are missing
+   *
+   * @example
+   * ```typescript
+   * const schema = SchemaLoader.fromJson('./config/appsheet-schema.json');
+   * const db = new SchemaManager(schema);
+   * ```
    */
   static fromJson(filePath: string): SchemaConfig {
     const content = fs.readFileSync(filePath, 'utf-8');
@@ -42,7 +55,26 @@ export class SchemaLoader {
   }
 
   /**
-   * Load schema from YAML file
+   * Load schema from a YAML file.
+   *
+   * Reads a YAML file containing the schema configuration and resolves any
+   * environment variables using the ${VAR_NAME} syntax.
+   *
+   * @param filePath - Absolute or relative path to the YAML schema file
+   * @returns Parsed and resolved SchemaConfig
+   * @throws {Error} If file cannot be read or parsed, or if environment variables are missing
+   *
+   * @example
+   * ```typescript
+   * // Schema file: config/appsheet-schema.yaml
+   * // connections:
+   * //   worklog:
+   * //     appId: ${APPSHEET_WORKLOG_APP_ID}
+   * //     applicationAccessKey: ${APPSHEET_WORKLOG_ACCESS_KEY}
+   *
+   * const schema = SchemaLoader.fromYaml('./config/appsheet-schema.yaml');
+   * const db = new SchemaManager(schema);
+   * ```
    */
   static fromYaml(filePath: string): SchemaConfig {
     const content = fs.readFileSync(filePath, 'utf-8');
@@ -51,7 +83,27 @@ export class SchemaLoader {
   }
 
   /**
-   * Load schema from object (for programmatic use)
+   * Load schema from an object.
+   *
+   * Takes a schema configuration object and resolves any environment variables.
+   * Useful for programmatic schema creation or testing.
+   *
+   * @param schema - Schema configuration object
+   * @returns Resolved SchemaConfig with environment variables substituted
+   * @throws {Error} If environment variables referenced in the schema are missing
+   *
+   * @example
+   * ```typescript
+   * const schema = SchemaLoader.fromObject({
+   *   connections: {
+   *     worklog: {
+   *       appId: '${APPSHEET_APP_ID}',
+   *       applicationAccessKey: '${APPSHEET_ACCESS_KEY}',
+   *       tables: { ... }
+   *     }
+   *   }
+   * });
+   * ```
    */
   static fromObject(schema: SchemaConfig): SchemaConfig {
     return this.resolveEnvVars(schema);
@@ -88,7 +140,28 @@ export class SchemaLoader {
   }
 
   /**
-   * Validate schema structure
+   * Validate schema structure.
+   *
+   * Performs comprehensive validation of a schema configuration,
+   * checking for required fields, proper structure, and completeness.
+   * Returns a validation result with any errors found.
+   *
+   * @param schema - The schema configuration to validate
+   * @returns Validation result object containing validity status and error list
+   *
+   * @example
+   * ```typescript
+   * const schema = SchemaLoader.fromYaml('./config/appsheet-schema.yaml');
+   * const validation = SchemaLoader.validate(schema);
+   *
+   * if (!validation.valid) {
+   *   console.error('Schema validation failed:');
+   *   validation.errors.forEach(err => console.error('  -', err));
+   *   process.exit(1);
+   * }
+   *
+   * console.log('Schema is valid!');
+   * ```
    */
   static validate(schema: SchemaConfig): SchemaValidationResult {
     const errors: string[] = [];

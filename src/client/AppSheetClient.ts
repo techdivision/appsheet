@@ -7,6 +7,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import {
   AppSheetConfig,
+  RequestProperties,
   AddOptions,
   FindOptions,
   UpdateOptions,
@@ -36,19 +37,27 @@ import {
  * ```typescript
  * const client = new AppSheetClient({
  *   appId: 'your-app-id',
- *   applicationAccessKey: 'your-access-key'
+ *   applicationAccessKey: 'your-access-key',
+ *   runAsUserEmail: 'default@example.com'  // Global default
  * });
  *
- * // Find all rows
+ * // Find all rows (runs as default@example.com)
  * const users = await client.findAll('Users');
  *
- * // Add a row
+ * // Add a row with different user (per-operation override)
  * await client.addOne('Users', { name: 'John', email: 'john@example.com' });
+ *
+ * // Override runAsUserEmail for specific operation
+ * await client.add({
+ *   tableName: 'Users',
+ *   rows: [{ name: 'Jane' }],
+ *   properties: { RunAsUserEmail: 'admin@example.com' }
+ * });
  * ```
  */
 export class AppSheetClient {
   private readonly axios: AxiosInstance;
-  private readonly config: Required<AppSheetConfig>;
+  private readonly config: Required<Omit<AppSheetConfig, 'runAsUserEmail'>> & { runAsUserEmail?: string };
 
   /**
    * Creates a new AppSheet API client instance.
@@ -62,7 +71,8 @@ export class AppSheetClient {
    *   appId: process.env.APPSHEET_APP_ID!,
    *   applicationAccessKey: process.env.APPSHEET_ACCESS_KEY!,
    *   timeout: 60000,  // Optional: 60 seconds
-   *   retryAttempts: 5  // Optional: retry 5 times
+   *   retryAttempts: 5,  // Optional: retry 5 times
+   *   runAsUserEmail: 'user@example.com'  // Optional: run all operations as this user
    * });
    * ```
    */
@@ -113,7 +123,7 @@ export class AppSheetClient {
 
     const payload = {
       Action: 'Add',
-      Properties: options.properties || {},
+      Properties: this.mergeProperties(options.properties),
       Rows: options.rows,
     };
 
@@ -150,7 +160,7 @@ export class AppSheetClient {
   async find<T = Record<string, any>>(options: FindOptions): Promise<FindResponse<T>> {
     const url = `/apps/${this.config.appId}/tables/${options.tableName}/Action`;
 
-    const properties = options.properties || {};
+    const properties = this.mergeProperties(options.properties);
     if (options.selector) {
       properties.Selector = options.selector;
     }
@@ -198,7 +208,7 @@ export class AppSheetClient {
 
     const payload = {
       Action: 'Edit',
-      Properties: options.properties || {},
+      Properties: this.mergeProperties(options.properties),
       Rows: options.rows,
     };
 
@@ -239,7 +249,7 @@ export class AppSheetClient {
 
     const payload = {
       Action: 'Delete',
-      Properties: options.properties || {},
+      Properties: this.mergeProperties(options.properties),
       Rows: options.rows,
     };
 
@@ -361,11 +371,37 @@ export class AppSheetClient {
   }
 
   /**
+   * Merge global properties with per-operation properties.
+   * Per-operation properties take precedence over global config.
+   */
+  private mergeProperties(operationProperties?: RequestProperties): RequestProperties {
+    const properties: RequestProperties = {};
+
+    // Add global runAsUserEmail if configured
+    if (this.config.runAsUserEmail) {
+      properties.RunAsUserEmail = this.config.runAsUserEmail;
+    }
+
+    // Merge with operation-specific properties (takes precedence)
+    if (operationProperties) {
+      Object.assign(properties, operationProperties);
+    }
+
+    return properties;
+  }
+
+  /**
    * Execute request with retry logic and error handling
    */
   private async request<T>(url: string, payload: any, attempt = 1): Promise<T> {
     try {
       const response = await this.axios.post<T>(url, payload);
+
+      // Handle case where API returns array directly instead of {Rows: [...]}
+      if (Array.isArray(response.data)) {
+        return { Rows: response.data } as T;
+      }
+
       return response.data;
     } catch (error) {
       // Handle axios errors
@@ -450,7 +486,7 @@ export class AppSheetClient {
    *
    * @returns The client configuration
    */
-  getConfig(): Readonly<Required<AppSheetConfig>> {
+  getConfig(): Readonly<Required<Omit<AppSheetConfig, 'runAsUserEmail'>> & { runAsUserEmail?: string }> {
     return { ...this.config };
   }
 }

@@ -1,25 +1,62 @@
 /**
  * Schema inspector for automatically discovering table structures
+ * @module cli
+ * @category CLI
  */
 
 import { AppSheetClient } from '../client';
 import { TableInspectionResult, ConnectionDefinition, TableDefinition } from '../types';
 
 /**
- * Inspects AppSheet tables and generates schema definitions
+ * Inspects AppSheet tables and generates schema definitions.
+ *
+ * Automatically discovers table structures by fetching sample data and
+ * inferring field types, key fields, and generating schema definitions.
+ * Used by the CLI tool for schema generation.
+ *
+ * @category CLI
+ *
+ * @example
+ * ```typescript
+ * const client = new AppSheetClient({ appId, applicationAccessKey });
+ * const inspector = new SchemaInspector(client);
+ *
+ * // Inspect a single table
+ * const result = await inspector.inspectTable('extract_worklog');
+ * console.log('Fields:', result.fields);
+ * console.log('Key field:', result.keyField);
+ * ```
  */
 export class SchemaInspector {
   constructor(private client: AppSheetClient) {}
 
   /**
-   * Inspect a specific table and infer its schema
+   * Inspect a specific table and infer its schema.
+   *
+   * Fetches sample data from the table and analyzes it to determine:
+   * - Field names and types (string, number, boolean, date, array, object)
+   * - Primary key field (looks for id, key, ID, Key, _RowNumber)
+   * - Field structure
+   *
+   * @param tableName - The name of the AppSheet table to inspect
+   * @returns Promise resolving to table inspection result with inferred schema
+   * @throws {Error} If the table cannot be accessed or inspected
+   *
+   * @example
+   * ```typescript
+   * const result = await inspector.inspectTable('extract_worklog');
+   * if (result.warning) {
+   *   console.warn('Warning:', result.warning);
+   * }
+   * console.log('Discovered fields:', Object.keys(result.fields));
+   * ```
    */
   async inspectTable(tableName: string): Promise<TableInspectionResult> {
     try {
       // Fetch some rows to infer field types
       const result = await this.client.find({
         tableName,
-        selector: '1=1', // Get all rows (or limit could be added)
+        // No selector = get all rows
       });
 
       if (!result.rows || result.rows.length === 0) {

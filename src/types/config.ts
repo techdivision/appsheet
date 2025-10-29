@@ -26,6 +26,9 @@ export interface AppSheetConfig {
 
   /** Number of retry attempts for failed requests (default: 3) */
   retryAttempts?: number;
+
+  /** Optional email of user to run all operations as (can be overridden per operation) */
+  runAsUserEmail?: string;
 }
 
 /**

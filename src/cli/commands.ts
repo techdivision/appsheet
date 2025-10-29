@@ -52,6 +52,7 @@ export function createCLI(): Command {
     .requiredOption('--app-id <id>', 'AppSheet App ID')
     .requiredOption('--access-key <key>', 'AppSheet Access Key')
     .option('--tables <tables>', 'Comma-separated list of table names')
+    .option('--run-as-user-email <email>', 'Run API calls as specific user (for security filters)')
     .option('--connection-name <name>', 'Connection name', 'default')
     .option('-o, --output <path>', 'Output file path', 'config/appsheet-schema.yaml')
     .option('-f, --format <format>', 'Output format (yaml|json)', 'yaml')
@@ -61,6 +62,7 @@ export function createCLI(): Command {
         const client = new AppSheetClient({
           appId: options.appId,
           applicationAccessKey: options.accessKey,
+          runAsUserEmail: options.runAsUserEmail,
         });
 
         const inspector = new SchemaInspector(client);
