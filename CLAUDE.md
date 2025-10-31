@@ -42,8 +42,13 @@ node dist/cli/index.js inspect --help
 - Handles authentication, retries with exponential backoff, and error conversion
 - Base URL: `https://api.appsheet.com/api/v2`
 - All operations require: appId, applicationAccessKey, tableName
-- Optional global `runAsUserEmail` config automatically injected into all requests
-- Per-operation override possible via `properties.RunAsUserEmail`
+- **User Configuration**: Optional global `runAsUserEmail` config automatically injected into all requests
+  - Set globally in AppSheetClient constructor: `new AppSheetClient({ appId, applicationAccessKey, runAsUserEmail: 'user@example.com' })`
+  - Per-operation override possible via `properties.RunAsUserEmail`
+  - Required for operations that need user context (permissions, auditing, etc.)
+- **Response Handling**: Automatically handles both AppSheet API response formats:
+  - Standard format: `{ Rows: [...], Warnings?: [...] }`
+  - Direct array format: `[...]` (automatically converted to standard format)
 
 **DynamicTable** (`src/client/DynamicTable.ts`)
 - Schema-aware table client with runtime validation
@@ -90,6 +95,7 @@ connections:
   <connection-name>:
     appId: ${ENV_VAR}
     applicationAccessKey: ${ENV_VAR}
+    runAsUserEmail: user@example.com  # Optional: global user for all operations in this connection
     tables:
       <schema-table-name>:
         tableName: <actual-appsheet-table-name>
@@ -146,13 +152,19 @@ Retry logic applies to network errors and 5xx server errors (max 3 attempts by d
 }
 ```
 
-**Response Structure**:
+**Response Structure** (handled automatically by client):
 ```json
+// Standard format
 {
   "Rows": [...],
   "Warnings": [...]
 }
+
+// Alternative format (converted automatically)
+[...]  // Direct array, converted to { Rows: [...], Warnings: [] }
 ```
+
+**Note**: The AppSheet API may return responses in either format. The AppSheetClient automatically normalizes both formats to the standard `{ Rows: [...], Warnings?: [...] }` structure for consistent handling.
 
 ## Documentation
 

@@ -32,11 +32,14 @@ src/
 interface AppSheetConfig {
   appId: string;                    // AppSheet App-ID
   applicationAccessKey: string;     // API Access Key
+  runAsUserEmail?: string;          // Optional: Global User-Email für alle Operationen
   baseUrl?: string;                 // Optional: Custom API URL
   timeout?: number;                 // Optional: Request Timeout (default: 30000ms)
   retryAttempts?: number;          // Optional: Anzahl Wiederholungsversuche (default: 3)
 }
 ```
+
+**Wichtig**: `runAsUserEmail` ist erforderlich für Operationen, die Benutzerkontext benötigen (Berechtigungen, Auditing, etc.). Kann global gesetzt oder pro Operation überschrieben werden.
 
 ### 2. CRUD-Operationen
 
@@ -151,7 +154,8 @@ import { AppSheetClient } from '@techdivision/appsheet';
 
 const client = new AppSheetClient({
   appId: 'your-app-id',
-  applicationAccessKey: 'your-access-key'
+  applicationAccessKey: 'your-access-key',
+  runAsUserEmail: 'user@example.com'  // Optional: Default User für alle Operationen
 });
 
 // Create
@@ -333,6 +337,10 @@ Content-Type: application/json
 ```
 
 ### Response Format
+
+Die AppSheet API kann Antworten in zwei verschiedenen Formaten zurückgeben:
+
+**Standard-Format** (empfohlen):
 ```json
 {
   "Rows": [
@@ -341,6 +349,16 @@ Content-Type: application/json
   "Warnings": ["optional warnings"]
 }
 ```
+
+**Alternatives Format** (direkte Array-Antwort):
+```json
+[
+  { /* row data */ },
+  { /* row data */ }
+]
+```
+
+**Wichtig**: Der AppSheetClient normalisiert automatisch beide Formate zum Standard-Format `{ Rows: [...], Warnings?: [...] }`. Entwickler müssen sich nicht um unterschiedliche Response-Formate kümmern.
 
 ## Erweiterbarkeit
 
@@ -381,6 +399,7 @@ connections:
   worklog:
     appId: ${APPSHEET_WORKLOG_APP_ID}
     applicationAccessKey: ${APPSHEET_WORKLOG_ACCESS_KEY}
+    runAsUserEmail: ${APPSHEET_USER_EMAIL}  # Optional: Default User für alle Operationen
     tables:
       worklogs:
         tableName: worklog
@@ -406,6 +425,7 @@ connections:
   hr:
     appId: ${APPSHEET_HR_APP_ID}
     applicationAccessKey: ${APPSHEET_HR_ACCESS_KEY}
+    runAsUserEmail: ${APPSHEET_HR_USER_EMAIL}  # Optional: Unterschiedlicher User pro Connection
     tables:
       employees:
         tableName: employees
@@ -434,6 +454,7 @@ Oder als JSON:
     "worklog": {
       "appId": "${APPSHEET_WORKLOG_APP_ID}",
       "applicationAccessKey": "${APPSHEET_WORKLOG_ACCESS_KEY}",
+      "runAsUserEmail": "${APPSHEET_USER_EMAIL}",
       "tables": {
         "worklogs": {
           "tableName": "worklog",
@@ -486,6 +507,7 @@ export interface TableDefinition {
 export interface ConnectionDefinition {
   appId: string;
   applicationAccessKey: string;
+  runAsUserEmail?: string;          // Optional: Default User für alle Operationen dieser Connection
   baseUrl?: string;
   timeout?: number;
   tables: Record<string, TableDefinition>;
@@ -621,6 +643,7 @@ export class SchemaManager {
         name: connName,
         appId: connDef.appId,
         applicationAccessKey: connDef.applicationAccessKey,
+        runAsUserEmail: connDef.runAsUserEmail,  // Optional: User-Email für diese Connection
         baseUrl: connDef.baseUrl,
         timeout: connDef.timeout,
       });
@@ -1867,6 +1890,7 @@ export interface ConnectionConfig {
   name: string;                       // Eindeutiger Name (z.B. "worklog-app", "hr-app")
   appId: string;
   applicationAccessKey: string;
+  runAsUserEmail?: string;            // Optional: Default User für alle Operationen dieser Connection
   baseUrl?: string;
   timeout?: number;
   retryAttempts?: number;
@@ -1886,6 +1910,7 @@ export class ConnectionManager {
     const client = new AppSheetClient({
       appId: config.appId,
       applicationAccessKey: config.applicationAccessKey,
+      runAsUserEmail: config.runAsUserEmail,
       baseUrl: config.baseUrl,
       timeout: config.timeout,
       retryAttempts: config.retryAttempts,
@@ -1951,6 +1976,7 @@ export function initializeConnections() {
     name: 'worklog',
     appId: process.env.APPSHEET_WORKLOG_APP_ID!,
     applicationAccessKey: process.env.APPSHEET_WORKLOG_ACCESS_KEY!,
+    runAsUserEmail: process.env.APPSHEET_WORKLOG_USER_EMAIL,  // Optional
   });
 
   // HR App
@@ -1958,6 +1984,7 @@ export function initializeConnections() {
     name: 'hr',
     appId: process.env.APPSHEET_HR_APP_ID!,
     applicationAccessKey: process.env.APPSHEET_HR_ACCESS_KEY!,
+    runAsUserEmail: process.env.APPSHEET_HR_USER_EMAIL,  // Optional
   });
 
   // Customer Portal App
@@ -1965,6 +1992,7 @@ export function initializeConnections() {
     name: 'customer-portal',
     appId: process.env.APPSHEET_PORTAL_APP_ID!,
     applicationAccessKey: process.env.APPSHEET_PORTAL_ACCESS_KEY!,
+    runAsUserEmail: process.env.APPSHEET_PORTAL_USER_EMAIL,  // Optional
   });
 }
 ```
@@ -2170,14 +2198,17 @@ async function handleGetWorklogs(connectionName: string) {
 # Worklog App
 APPSHEET_WORKLOG_APP_ID=worklog-app-123
 APPSHEET_WORKLOG_ACCESS_KEY=key-worklog-xyz
+APPSHEET_WORKLOG_USER_EMAIL=worklog-user@example.com
 
 # HR App
 APPSHEET_HR_APP_ID=hr-app-456
 APPSHEET_HR_ACCESS_KEY=key-hr-abc
+APPSHEET_HR_USER_EMAIL=hr-admin@example.com
 
 # Customer Portal
 APPSHEET_PORTAL_APP_ID=portal-app-789
 APPSHEET_PORTAL_ACCESS_KEY=key-portal-def
+APPSHEET_PORTAL_USER_EMAIL=portal@example.com
 ```
 
 ```typescript
@@ -2186,14 +2217,17 @@ export const appSheetConfig = {
   worklog: {
     appId: process.env.APPSHEET_WORKLOG_APP_ID!,
     applicationAccessKey: process.env.APPSHEET_WORKLOG_ACCESS_KEY!,
+    runAsUserEmail: process.env.APPSHEET_WORKLOG_USER_EMAIL,
   },
   hr: {
     appId: process.env.APPSHEET_HR_APP_ID!,
     applicationAccessKey: process.env.APPSHEET_HR_ACCESS_KEY!,
+    runAsUserEmail: process.env.APPSHEET_HR_USER_EMAIL,
   },
   portal: {
     appId: process.env.APPSHEET_PORTAL_APP_ID!,
     applicationAccessKey: process.env.APPSHEET_PORTAL_ACCESS_KEY!,
+    runAsUserEmail: process.env.APPSHEET_PORTAL_USER_EMAIL,
   },
 } as const;
 

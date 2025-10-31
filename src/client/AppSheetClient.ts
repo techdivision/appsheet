@@ -391,15 +391,21 @@ export class AppSheetClient {
   }
 
   /**
-   * Execute request with retry logic and error handling
+   * Execute request with retry logic and error handling.
+   *
+   * Handles both response formats from AppSheet API:
+   * - Standard format: { Rows: [...], Warnings?: [...] }
+   * - Direct array format: [...]
    */
   private async request<T>(url: string, payload: any, attempt = 1): Promise<T> {
     try {
       const response = await this.axios.post<T>(url, payload);
 
-      // Handle case where API returns array directly instead of {Rows: [...]}
+      // AppSheet API can return data in two formats:
+      // 1. Direct array: [...] - transform to standard format
+      // 2. Standard object: { Rows: [...], Warnings?: [...] } - use as-is
       if (Array.isArray(response.data)) {
-        return { Rows: response.data } as T;
+        return { Rows: response.data, Warnings: [] } as T;
       }
 
       return response.data;
