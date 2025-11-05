@@ -21,7 +21,8 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "docs": "typedoc",
-    "docs:serve": "typedoc && npx http-server docs/api -o"
+    "docs:serve": "typedoc && npx http-server docs/api -o",
+    "prepare": "npm run build"
   },
   "keywords": [
     "appsheet",
