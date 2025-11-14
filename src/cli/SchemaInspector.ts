@@ -4,6 +4,7 @@
  * @category CLI
  */
 
+import * as readline from 'readline';
 import { AppSheetClient } from '../client';
 import { TableInspectionResult, ConnectionDefinition, TableDefinition } from '../types';
 
@@ -227,7 +228,6 @@ export class SchemaInspector {
     console.log('\nAutomatic table discovery is not available.');
     console.log('Please enter table names manually.\n');
 
-    const readline = require('readline');
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
