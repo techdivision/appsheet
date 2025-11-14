@@ -22,7 +22,12 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "docs": "typedoc",
     "docs:serve": "typedoc && npx http-server docs/api -o",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "version:patch": "npm version patch",
+    "version:minor": "npm version minor",
+    "version:major": "npm version major",
+    "version:prerelease": "npm version prerelease --preid=beta",
+    "release": "npm test && npm run lint && npm run build && git push --follow-tags"
   },
   "keywords": [
     "appsheet",
@@ -46,8 +51,10 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "@types/uuid": "^10.0.0",
     "axios": "^1.6.0",
     "commander": "^11.0.0",
+    "uuid": "^13.0.0",
     "yaml": "^2.3.0"
   },
   "optionalDependencies": {

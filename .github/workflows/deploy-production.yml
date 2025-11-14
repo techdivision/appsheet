@@ -1,0 +1,67 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-production:
+    name: Deploy to Production Environment
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://production.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run build
+        run: npm run build
+
+      - name: Deploy to Production
+        run: |
+          echo "Deploying to Production environment..."
+          # Add your production deployment commands here
+          # Examples:
+          # - npm publish --access public
+          # - Deploy to production server
+          # - Deploy to production cloud environment
+        env:
+          # Add your production environment secrets here
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PRODUCTION_TOKEN: ${{ secrets.PRODUCTION_TOKEN }}
+
+      - name: Create deployment tag
+        if: success()
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          git tag "deploy-prod-${TIMESTAMP}"
+          git push origin "deploy-prod-${TIMESTAMP}" || true
+
+      - name: Notify deployment
+        if: success()
+        run: |
+          echo "✅ Successfully deployed to Production"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+
+      - name: Notify failure
+        if: failure()
+        run: |
+          echo "❌ Production deployment failed"
+          echo "Check logs for details"

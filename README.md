@@ -204,6 +204,73 @@ npm run lint
 npm run format
 ```
 
+## Versioning
+
+This project follows [Semantic Versioning 2.0.0](https://semver.org/):
+
+- **MAJOR** version (X.0.0): Breaking changes
+- **MINOR** version (0.X.0): New features (backward compatible)
+- **PATCH** version (0.0.X): Bug fixes (backward compatible)
+
+### Release Process
+
+```bash
+# Bug fix release (1.0.0 -> 1.0.1)
+npm run version:patch
+
+# New feature release (1.0.0 -> 1.1.0)
+npm run version:minor
+
+# Breaking change release (1.0.0 -> 2.0.0)
+npm run version:major
+
+# Pre-release (1.0.0 -> 1.0.1-beta.0)
+npm run version:prerelease
+
+# Push release
+npm run release
+```
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed versioning guidelines.
+
+## Git-Flow
+
+This project uses Git-Flow with three branches:
+
+```
+develop → CI only (no deployments)
+staging → Staging deployment (pre-production)
+main    → Production deployment
+```
+
+**Quick Reference:** [.github/GIT-FLOW.md](./.github/GIT-FLOW.md)
+
+### Branch Flow
+```
+feature/xxx → develop → staging → main
+```
+
+### Quick Start
+```bash
+# 1. Create feature from develop
+git checkout -b feature/my-feature develop
+
+# 2. Create PR to develop (CI runs)
+
+# 3. Merge develop to staging (deploys to staging)
+
+# 4. Merge staging to main (deploys to production)
+```
+
+## Contributing
+
+We welcome contributions! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for:
+- **Git-Flow branch strategy** (develop → staging → main)
+- Semantic versioning guidelines
+- Commit message conventions (Conventional Commits)
+- Development workflow
+- Pull request process
+
 ## License
 
 MIT

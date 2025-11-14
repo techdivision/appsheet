@@ -5,6 +5,9 @@
 // Config types
 export * from './config';
 
+// Client interface
+export * from './client';
+
 // Operation types
 export * from './operations';
 
@@ -16,3 +19,6 @@ export * from './schema';
 
 // Error types
 export * from './errors';
+
+// Mock types
+export * from './mock';
