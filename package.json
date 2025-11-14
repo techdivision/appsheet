@@ -1,6 +1,6 @@
 {
   "name": "@techdivision/appsheet",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Generic TypeScript library for AppSheet CRUD operations",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
