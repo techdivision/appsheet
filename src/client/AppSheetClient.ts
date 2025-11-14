@@ -7,6 +7,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import {
   AppSheetConfig,
+  AppSheetClientInterface,
   RequestProperties,
   AddOptions,
   FindOptions,
@@ -55,7 +56,7 @@ import {
  * });
  * ```
  */
-export class AppSheetClient {
+export class AppSheetClient implements AppSheetClientInterface {
   private readonly axios: AxiosInstance;
   private readonly config: Required<Omit<AppSheetConfig, 'runAsUserEmail'>> & { runAsUserEmail?: string };
 

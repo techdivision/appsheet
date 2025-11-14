@@ -8,6 +8,44 @@ This is a generic TypeScript library for AppSheet CRUD operations, designed for 
 1. **Direct client usage** - Simple AppSheetClient for basic operations
 2. **Schema-based usage** - Runtime schema loading from YAML/JSON with type-safe table clients and validation
 
+## Git-Flow Branch Strategy ⚠️ WICHTIG
+
+**KRITISCH:** Dieses Projekt folgt einer klassischen Git-Flow Strategie:
+
+```
+develop → CI only (keine Deployments)
+staging → Staging Deployment (Pre-Production)
+main    → Production Deployment
+```
+
+### Branch Rules
+
+| Branch    | CI | Deploy | Purpose |
+|-----------|-----|--------|---------|
+| `develop` | ✅  | ❌     | Feature integration (CI only) |
+| `staging` | ✅  | ✅     | Pre-production testing |
+| `main`    | ✅  | ✅     | Production releases |
+
+### Feature Development Flow
+
+```bash
+# 1. Create feature from develop
+git checkout develop
+git checkout -b feature/new-feature
+
+# 2. Create PR: feature/new-feature → develop (CI runs)
+# 3. Merge: develop → staging (auto-deploys to staging)
+# 4. Merge: staging → main (auto-deploys to production)
+```
+
+### Branch Protection
+
+- **develop**: 1 reviewer, CI required, no deploy
+- **staging**: 1 reviewer, CI required, auto-deploy
+- **main**: 2 reviewers, CI required, auto-deploy
+
+**Siehe:** [.github/GIT-FLOW.md](.github/GIT-FLOW.md) und [CONTRIBUTING.md](CONTRIBUTING.md) für Details.
+
 ## Development Commands
 
 ```bash
@@ -17,8 +55,10 @@ npm run build:watch        # Watch mode compilation
 npm run clean              # Remove dist/ directory
 
 # Testing
-npm test                   # Run Jest tests
+npm test                   # Run all Jest tests
 npm test:watch             # Watch mode testing
+npm test -- <pattern>      # Run tests matching pattern (e.g., npm test -- AppSheetClient)
+npx jest <file>            # Run specific test file (e.g., npx jest tests/client/AppSheetClient.test.ts)
 
 # Code Quality
 npm run lint               # Check for linting errors
@@ -31,6 +71,7 @@ npm run docs:serve         # Generate and serve docs locally
 
 # CLI Testing (after build)
 node dist/cli/index.js inspect --help
+npx appsheet inspect --help  # After npm install (uses bin entry)
 ```
 
 ## Architecture
@@ -49,6 +90,11 @@ node dist/cli/index.js inspect --help
 - **Response Handling**: Automatically handles both AppSheet API response formats:
   - Standard format: `{ Rows: [...], Warnings?: [...] }`
   - Direct array format: `[...]` (automatically converted to standard format)
+
+**AppSheetClientInterface** (`src/types/client.ts`)
+- Interface defining the contract for all client implementations
+- Implemented by both AppSheetClient and MockAppSheetClient
+- Ensures type safety and allows swapping implementations in tests
 
 **DynamicTable** (`src/client/DynamicTable.ts`)
 - Schema-aware table client with runtime validation
@@ -83,9 +129,13 @@ node dist/cli/index.js inspect --help
 
 **CLI Commands** (`src/cli/commands.ts`)
 - `init` - Create empty schema file
-- `inspect` - Generate schema from AppSheet app (with optional auto-discovery)
+- `inspect` - Generate schema from AppSheet app
+  - With `--tables` flag: Generate schema for specific tables
+  - Without `--tables` flag: Auto-discovery mode (prompts user to select tables interactively)
 - `add-table` - Add single table to existing schema
 - `validate` - Validate schema file structure
+
+CLI binary name: `appsheet` (defined in package.json bin field)
 
 ## Key Design Patterns
 
@@ -182,10 +232,16 @@ Categories: Client, Schema Management, Connection Management, Types, Errors
 ```
 src/
 ├── client/          # AppSheetClient, DynamicTable
+│   └── __mocks__/   # Mock implementations for testing
 ├── types/           # All TypeScript interfaces and types
 ├── utils/           # ConnectionManager, SchemaLoader, SchemaManager
 ├── cli/             # CLI commands and SchemaInspector
 └── index.ts         # Main export file
+
+tests/               # Test files (separate from source)
+├── client/          # Client tests
+│   └── AppSheetClient.test.ts
+└── ...              # Tests mirror src/ structure
 
 examples/            # Usage examples
 docs/
@@ -193,11 +249,60 @@ docs/
 └── api/             # Generated TypeDoc HTML (gitignored)
 ```
 
+## Testing
+
+### MockAppSheetClient
+For testing purposes, use `MockAppSheetClient` (`src/client/MockAppSheetClient.ts`):
+- In-memory mock implementation of `AppSheetClientInterface`
+- Implements the same interface as `AppSheetClient` for easy swapping in tests
+- Stores data in memory without making API calls
+- Useful for unit tests and local development
+- Fully tested with comprehensive test suite
+
+```typescript
+import { MockAppSheetClient, AppSheetClientInterface } from '@techdivision/appsheet';
+
+// Direct usage
+const mockClient = new MockAppSheetClient({
+  appId: 'mock-app',
+  applicationAccessKey: 'mock-key'
+});
+await mockClient.addOne('Users', { id: '1', name: 'Test' });
+const users = await mockClient.findAll('Users'); // Returns mock data
+
+// Using interface for polymorphism
+function processUsers(client: AppSheetClientInterface) {
+  return client.findAll('Users');
+}
+
+// Works with both real and mock clients
+const realClient = new AppSheetClient({ appId, applicationAccessKey });
+const mockClient = new MockAppSheetClient({ appId, applicationAccessKey });
+
+await processUsers(realClient); // Uses real API
+await processUsers(mockClient); // Uses in-memory data
+```
+
+### Test Configuration
+- Tests use Jest with ts-jest preset
+- Test files located in `tests/` directory (separate from `src/`)
+- Test structure mirrors `src/` directory structure
+- Test files: `**/*.test.ts` or `**/*.spec.ts`
+- Coverage configured to exclude type definitions and mock files
+- Mock data available in `src/client/__mocks__/` directory
+- Import paths from tests: `import { X } from '../../src/module/X'`
+
+### Test Files
+- `tests/client/AppSheetClient.test.ts` - Tests for real AppSheet client
+- `tests/client/MockAppSheetClient.test.ts` - Tests for mock client implementation
+
 ## Important Notes
 
 - The library uses AppSheet API v2
-- CLI binary entry point: `dist/cli/index.js` (needs `chmod +x` after build)
-- Schema files support environment variable substitution
+- CLI binary entry point: `dist/cli/index.js` (automatically made executable by npm)
+- CLI binary command: `appsheet` (can be run via `npx appsheet` after installation)
+- Schema files support environment variable substitution with `${VAR_NAME}` syntax
 - SchemaInspector's `toSchemaName()` method removes "extract_" prefix and adds "s" suffix
 - Multi-instance support allows one MCP server to access multiple AppSheet apps
 - Runtime validation in DynamicTable checks types but doesn't prevent API calls for performance
+- The library is designed to be installed from GitHub via npm (not published to npm registry yet)
