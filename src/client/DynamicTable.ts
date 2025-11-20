@@ -5,7 +5,8 @@
  */
 
 import { AppSheetClient } from './AppSheetClient';
-import { TableDefinition, ValidationError } from '../types';
+import { TableDefinition } from '../types';
+import { AppSheetTypeValidator } from '../utils/validators';
 
 /**
  * Table client with schema-based operations and runtime validation.
@@ -280,7 +281,7 @@ export class DynamicTable<T = Record<string, any>> {
   }
 
   /**
-   * Validate rows based on schema
+   * Validate rows based on schema using AppSheetTypeValidator
    */
   private validateRows(rows: Partial<T>[], checkRequired = true): void {
     for (let i = 0; i < rows.length; i++) {
@@ -292,10 +293,13 @@ export class DynamicTable<T = Record<string, any>> {
         const value = (row as any)[fieldName];
 
         // Check required fields (only for add operations)
-        if (checkRequired && isRequired && (value === undefined || value === null)) {
-          throw new ValidationError(
-            `Row ${i}: Field "${fieldName}" is required in table "${this.definition.tableName}"`,
-            { row, fieldName }
+        if (checkRequired && isRequired) {
+          AppSheetTypeValidator.validateRequired(
+            fieldName,
+            this.definition.tableName,
+            value,
+            row,
+            i
           );
         }
 
@@ -304,235 +308,15 @@ export class DynamicTable<T = Record<string, any>> {
           continue;
         }
 
-        // Type validation
-        this.validateFieldType(i, fieldName, fieldType, value);
+        // Type validation using AppSheetTypeValidator
+        AppSheetTypeValidator.validate(fieldName, fieldType, value, i);
 
         // Enum/EnumList validation
         if (fieldDef.allowedValues) {
-          this.validateEnum(i, fieldName, fieldType, fieldDef.allowedValues, value);
+          AppSheetTypeValidator.validateEnum(fieldName, fieldType, fieldDef.allowedValues, value, i);
         }
       }
     }
   }
 
-  /**
-   * Validate field type based on AppSheet field types
-   */
-  private validateFieldType(
-    rowIndex: number,
-    fieldName: string,
-    expectedType: string,
-    value: any
-  ): void {
-    const actualType = Array.isArray(value) ? 'array' : typeof value;
-
-    switch (expectedType) {
-      // Core numeric types
-      case 'Number':
-      case 'Decimal':
-      case 'Price':
-      case 'ChangeCounter':
-        if (actualType !== 'number') {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a number (${expectedType}), got ${actualType}`,
-            { fieldName, expectedType, actualType, value }
-          );
-        }
-        break;
-
-      // Percent: must be number between 0.00 and 1.00
-      case 'Percent':
-        if (actualType !== 'number') {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a number (Percent), got ${actualType}`,
-            { fieldName, expectedType, actualType, value }
-          );
-        }
-        if (value < 0 || value > 1) {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a percentage between 0.00 and 1.00, got: ${value}`,
-            { fieldName, value }
-          );
-        }
-        break;
-
-      // Boolean types
-      case 'YesNo':
-        if (actualType !== 'boolean' && value !== 'Yes' && value !== 'No') {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a boolean or "Yes"/"No" string, got ${actualType}`,
-            { fieldName, expectedType, actualType, value }
-          );
-        }
-        break;
-
-      // Array types
-      case 'EnumList':
-      case 'RefList':
-        if (!Array.isArray(value)) {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be an array (${expectedType}), got ${actualType}`,
-            { fieldName, expectedType, actualType, value }
-          );
-        }
-        break;
-
-      // Date types
-      case 'Date':
-        if (actualType === 'string') {
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-            throw new ValidationError(
-              `Row ${rowIndex}: Field "${fieldName}" must be a valid date string (YYYY-MM-DD)`,
-              { fieldName, value }
-            );
-          }
-        } else if (!(value instanceof Date)) {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a date string (YYYY-MM-DD) or Date object`,
-            { fieldName, value }
-          );
-        }
-        break;
-
-      case 'DateTime':
-      case 'ChangeTimestamp':
-        if (actualType === 'string') {
-          if (!/^\d{4}-\d{2}-\d{2}T/.test(value)) {
-            throw new ValidationError(
-              `Row ${rowIndex}: Field "${fieldName}" must be a valid datetime string (ISO 8601)`,
-              { fieldName, value }
-            );
-          }
-        } else if (!(value instanceof Date)) {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a datetime string (ISO 8601) or Date object`,
-            { fieldName, value }
-          );
-        }
-        break;
-
-      case 'Time':
-      case 'Duration':
-        if (actualType !== 'string') {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a string (${expectedType}), got ${actualType}`,
-            { fieldName, expectedType, actualType, value }
-          );
-        }
-        break;
-
-      // Email validation
-      case 'Email':
-        if (actualType !== 'string') {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a string (Email), got ${actualType}`,
-            { fieldName, expectedType, actualType, value }
-          );
-        }
-        // Basic RFC 5322 email validation
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a valid email address, got: ${value}`,
-            { fieldName, value }
-          );
-        }
-        break;
-
-      // URL validation
-      case 'URL':
-        if (actualType !== 'string') {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a string (URL), got ${actualType}`,
-            { fieldName, expectedType, actualType, value }
-          );
-        }
-        try {
-          new URL(value);
-        } catch {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a valid URL, got: ${value}`,
-            { fieldName, value }
-          );
-        }
-        break;
-
-      // Phone validation (flexible international format)
-      case 'Phone':
-        if (actualType !== 'string') {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a string (Phone), got ${actualType}`,
-            { fieldName, expectedType, actualType, value }
-          );
-        }
-        // Basic phone validation: digits, spaces, +, -, (, )
-        if (!/^[\d\s+\-()]+$/.test(value)) {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a valid phone number, got: ${value}`,
-            { fieldName, value }
-          );
-        }
-        break;
-
-      // Text-based types (no additional validation beyond string check)
-      case 'Text':
-      case 'Name':
-      case 'Address':
-      case 'Color':
-      case 'Enum':
-      case 'Ref':
-      case 'Image':
-      case 'File':
-      case 'Drawing':
-      case 'Signature':
-      case 'ChangeLocation':
-      case 'Show':
-        if (actualType !== 'string') {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a string (${expectedType}), got ${actualType}`,
-            { fieldName, expectedType, actualType, value }
-          );
-        }
-        break;
-
-      default:
-        // Unknown type - skip validation
-        break;
-    }
-  }
-
-  /**
-   * Validate enum/enumList values against allowed values
-   */
-  private validateEnum(
-    rowIndex: number,
-    fieldName: string,
-    fieldType: string,
-    allowedValues: string[],
-    value: any
-  ): void {
-    // EnumList: validate array of values
-    if (fieldType === 'EnumList') {
-      if (!Array.isArray(value)) {
-        throw new ValidationError(
-          `Row ${rowIndex}: Field "${fieldName}" must be an array for EnumList type`,
-          { fieldName, value }
-        );
-      }
-      const invalidValues = value.filter((v) => !allowedValues.includes(v));
-      if (invalidValues.length > 0) {
-        throw new ValidationError(
-          `Row ${rowIndex}: Field "${fieldName}" contains invalid values: ${invalidValues.join(', ')}. Allowed: ${allowedValues.join(', ')}`,
-          { fieldName, allowedValues, invalidValues }
-        );
-      }
-    } else {
-      // Enum: validate single value
-      if (!allowedValues.includes(value)) {
-        throw new ValidationError(
-          `Row ${rowIndex}: Field "${fieldName}" must be one of: ${allowedValues.join(', ')}. Got: ${value}`,
-          { fieldName, allowedValues, value }
-        );
-      }
-    }
-  }
 }
