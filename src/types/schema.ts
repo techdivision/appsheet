@@ -5,34 +5,128 @@
  */
 
 /**
- * Supported field data types in schema definitions.
+ * AppSheet-specific field data types.
+ *
+ * Represents all column types supported by AppSheet API.
+ *
  * @category Types
+ * @see https://support.google.com/appsheet/answer/10106435
  */
-export type FieldType = 'string' | 'number' | 'boolean' | 'date' | 'array' | 'object';
+export type AppSheetFieldType =
+  // Core types
+  | 'Text'
+  | 'Number'
+  | 'Date'
+  | 'DateTime'
+  | 'Time'
+  | 'Duration'
+  | 'YesNo'
+  // Specialized text types
+  | 'Name'
+  | 'Email'
+  | 'URL'
+  | 'Phone'
+  | 'Address'
+  // Specialized number types
+  | 'Decimal'
+  | 'Percent'
+  | 'Price'
+  // Selection types
+  | 'Enum'
+  | 'EnumList'
+  // Media types
+  | 'Image'
+  | 'File'
+  | 'Drawing'
+  | 'Signature'
+  // Tracking types
+  | 'ChangeCounter'
+  | 'ChangeTimestamp'
+  | 'ChangeLocation'
+  // Reference types
+  | 'Ref'
+  | 'RefList'
+  // Special types
+  | 'Color'
+  | 'Show';
 
 /**
- * Field definition with optional validation metadata.
+ * Field definition with AppSheet-specific type information and validation rules.
  *
- * Defines a table field with type information and optional validation rules.
+ * Defines a table field with AppSheet type information and optional validation metadata.
+ * All fields must use the full object definition format with explicit type property.
  *
  * @category Types
+ *
+ * @example
+ * ```typescript
+ * const fieldDef: FieldDefinition = {
+ *   type: 'Email',
+ *   required: true,
+ *   description: 'User email address'
+ * };
+ *
+ * const enumFieldDef: FieldDefinition = {
+ *   type: 'Enum',
+ *   required: true,
+ *   allowedValues: ['Active', 'Inactive', 'Pending']
+ * };
+ * ```
  */
 export interface FieldDefinition {
-  /** Field data type */
-  type: FieldType;
+  /** AppSheet field type (required) */
+  type: AppSheetFieldType;
 
-  /** Whether the field is required */
+  /** Whether the field is required (default: false) */
   required?: boolean;
 
-  /** Allowed values for enum fields */
-  enum?: string[];
+  /** Allowed values for Enum/EnumList fields */
+  allowedValues?: string[];
+
+  /** Referenced table name for Ref/RefList fields */
+  referencedTable?: string;
 
   /** Field description */
   description?: string;
+
+  /** Additional AppSheet-specific configuration */
+  appSheetConfig?: {
+    /** Allow other values (for Enum) */
+    allowOtherValues?: boolean;
+
+    /** Format hint for display */
+    format?: string;
+
+    /** Default value */
+    defaultValue?: any;
+  };
 }
 
 /**
- * Table definition in schema
+ * Table definition in schema.
+ *
+ * Defines a table structure with AppSheet-specific field types and validation rules.
+ * All fields must use the FieldDefinition object format (no shorthand strings).
+ *
+ * @category Types
+ *
+ * @example
+ * ```typescript
+ * const tableDef: TableDefinition = {
+ *   tableName: 'extract_user',
+ *   keyField: 'id',
+ *   fields: {
+ *     id: { type: 'Text', required: true },
+ *     email: { type: 'Email', required: true },
+ *     age: { type: 'Number', required: false },
+ *     status: {
+ *       type: 'Enum',
+ *       required: true,
+ *       allowedValues: ['Active', 'Inactive']
+ *     }
+ *   }
+ * };
+ * ```
  */
 export interface TableDefinition {
   /** Actual AppSheet table name */
@@ -41,8 +135,8 @@ export interface TableDefinition {
   /** Name of the key/primary field */
   keyField: string;
 
-  /** Field definitions (name -> type or full definition) */
-  fields: Record<string, string | FieldDefinition>;
+  /** Field definitions (name -> FieldDefinition object only) */
+  fields: Record<string, FieldDefinition>;
 }
 
 /**
@@ -74,7 +168,11 @@ export interface SchemaConfig {
 }
 
 /**
- * Result from table inspection
+ * Result from table inspection.
+ *
+ * Contains discovered table structure with inferred AppSheet field types.
+ *
+ * @category Types
  */
 export interface TableInspectionResult {
   /** Table name */
@@ -83,8 +181,8 @@ export interface TableInspectionResult {
   /** Inferred key field */
   keyField: string;
 
-  /** Discovered fields */
-  fields: Record<string, string>;
+  /** Discovered fields with AppSheet types */
+  fields: Record<string, FieldDefinition>;
 
   /** Optional warning message */
   warning?: string;

@@ -6,7 +6,13 @@
 
 import * as readline from 'readline';
 import { AppSheetClient } from '../client';
-import { TableInspectionResult, ConnectionDefinition, TableDefinition } from '../types';
+import {
+  TableInspectionResult,
+  ConnectionDefinition,
+  TableDefinition,
+  AppSheetFieldType,
+  FieldDefinition,
+} from '../types';
 
 /**
  * Inspects AppSheet tables and generates schema definitions.
@@ -71,10 +77,13 @@ export class SchemaInspector {
 
       // Analyze first row for field types
       const sampleRow = result.rows[0];
-      const fields: Record<string, string> = {};
+      const fields: Record<string, FieldDefinition> = {};
 
       for (const [key, value] of Object.entries(sampleRow)) {
-        fields[key] = this.inferType(value);
+        fields[key] = {
+          type: this.inferType(value),
+          required: false, // Cannot determine from data alone
+        };
       }
 
       return {
@@ -88,29 +97,65 @@ export class SchemaInspector {
   }
 
   /**
-   * Infer field type from value
+   * Infer AppSheet field type from value
    */
-  private inferType(value: any): string {
+  private inferType(value: any): AppSheetFieldType {
     if (value === null || value === undefined) {
-      return 'string'; // Default
+      return 'Text'; // Default
     }
 
     const type = typeof value;
 
-    if (type === 'number') return 'number';
-    if (type === 'boolean') return 'boolean';
-    if (Array.isArray(value)) return 'array';
-    if (type === 'object') return 'object';
+    // Number types
+    if (type === 'number') {
+      // Check if it looks like a percent (0.00 to 1.00)
+      if (value >= 0 && value <= 1 && value !== 0 && value !== 1) {
+        return 'Percent';
+      }
+      // Default to Number for all numeric values
+      return 'Number';
+    }
 
-    // Check if string looks like a date
+    // Boolean
+    if (type === 'boolean') {
+      return 'YesNo';
+    }
+
+    // Arrays
+    if (Array.isArray(value)) {
+      return 'EnumList'; // Assume array is EnumList
+    }
+
+    // Check string patterns
     if (type === 'string') {
-      // ISO date format
-      if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
-        return 'date';
+      // Email pattern
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        return 'Email';
+      }
+
+      // URL pattern
+      if (/^https?:\/\//i.test(value)) {
+        return 'URL';
+      }
+
+      // Phone pattern (basic)
+      if (/^[\d\s+\-()]{7,}$/.test(value)) {
+        return 'Phone';
+      }
+
+      // DateTime pattern (ISO 8601 with time)
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
+        return 'DateTime';
+      }
+
+      // Date pattern (YYYY-MM-DD)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return 'Date';
       }
     }
 
-    return 'string';
+    // Default to Text for strings and unknown types
+    return 'Text';
   }
 
   /**
