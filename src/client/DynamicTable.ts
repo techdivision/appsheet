@@ -5,7 +5,8 @@
  */
 
 import { AppSheetClient } from './AppSheetClient';
-import { TableDefinition, ValidationError } from '../types';
+import { TableDefinition } from '../types';
+import { AppSheetTypeValidator } from '../utils/validators';
 
 /**
  * Table client with schema-based operations and runtime validation.
@@ -280,22 +281,25 @@ export class DynamicTable<T = Record<string, any>> {
   }
 
   /**
-   * Validate rows based on schema
+   * Validate rows based on schema using AppSheetTypeValidator
    */
   private validateRows(rows: Partial<T>[], checkRequired = true): void {
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
 
       for (const [fieldName, fieldDef] of Object.entries(this.definition.fields)) {
-        const fieldType = typeof fieldDef === 'string' ? fieldDef : fieldDef.type;
-        const isRequired = typeof fieldDef === 'object' && fieldDef.required;
+        const fieldType = fieldDef.type;
+        const isRequired = fieldDef.required === true;
         const value = (row as any)[fieldName];
 
         // Check required fields (only for add operations)
-        if (checkRequired && isRequired && (value === undefined || value === null)) {
-          throw new ValidationError(
-            `Row ${i}: Field "${fieldName}" is required in table "${this.definition.tableName}"`,
-            { row, fieldName }
+        if (checkRequired && isRequired) {
+          AppSheetTypeValidator.validateRequired(
+            fieldName,
+            this.definition.tableName,
+            value,
+            row,
+            i
           );
         }
 
@@ -304,108 +308,15 @@ export class DynamicTable<T = Record<string, any>> {
           continue;
         }
 
-        // Type validation
-        this.validateFieldType(i, fieldName, fieldType, value);
+        // Type validation using AppSheetTypeValidator
+        AppSheetTypeValidator.validate(fieldName, fieldType, value, i);
 
-        // Enum validation
-        if (typeof fieldDef === 'object' && fieldDef.enum) {
-          this.validateEnum(i, fieldName, fieldDef.enum, value);
+        // Enum/EnumList validation
+        if (fieldDef.allowedValues) {
+          AppSheetTypeValidator.validateEnum(fieldName, fieldType, fieldDef.allowedValues, value, i);
         }
       }
     }
   }
 
-  /**
-   * Validate field type
-   */
-  private validateFieldType(
-    rowIndex: number,
-    fieldName: string,
-    expectedType: string,
-    value: any
-  ): void {
-    const actualType = Array.isArray(value) ? 'array' : typeof value;
-
-    switch (expectedType) {
-      case 'number':
-        if (actualType !== 'number') {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a number, got ${actualType}`,
-            { fieldName, expectedType, actualType, value }
-          );
-        }
-        break;
-
-      case 'boolean':
-        if (actualType !== 'boolean') {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a boolean, got ${actualType}`,
-            { fieldName, expectedType, actualType, value }
-          );
-        }
-        break;
-
-      case 'array':
-        if (!Array.isArray(value)) {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be an array, got ${actualType}`,
-            { fieldName, expectedType, actualType, value }
-          );
-        }
-        break;
-
-      case 'object':
-        if (actualType !== 'object' || Array.isArray(value)) {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be an object, got ${actualType}`,
-            { fieldName, expectedType, actualType, value }
-          );
-        }
-        break;
-
-      case 'date':
-        // Accept string, Date object, or ISO date format
-        if (actualType === 'string') {
-          // Basic ISO date check
-          if (!/^\d{4}-\d{2}-\d{2}/.test(value)) {
-            throw new ValidationError(
-              `Row ${rowIndex}: Field "${fieldName}" must be a valid date string (YYYY-MM-DD...)`,
-              { fieldName, value }
-            );
-          }
-        } else if (!(value instanceof Date)) {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a date string or Date object`,
-            { fieldName, value }
-          );
-        }
-        break;
-
-      case 'string':
-        if (actualType !== 'string') {
-          throw new ValidationError(
-            `Row ${rowIndex}: Field "${fieldName}" must be a string, got ${actualType}`,
-            { fieldName, expectedType, actualType, value }
-          );
-        }
-        break;
-    }
-  }
-
-  /**
-   * Validate enum value
-   */
-  private validateEnum(
-    rowIndex: number,
-    fieldName: string,
-    allowedValues: string[],
-    value: any
-  ): void {
-    if (!allowedValues.includes(value)) {
-      throw new ValidationError(
-        `Row ${rowIndex}: Field "${fieldName}" must be one of: ${allowedValues.join(', ')}. Got: ${value}`,
-        { fieldName, allowedValues, value }
-      );
-    }
-  }
 }
