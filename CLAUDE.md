@@ -97,9 +97,17 @@ npx appsheet inspect --help  # After npm install (uses bin entry)
 - Ensures type safety and allows swapping implementations in tests
 
 **DynamicTable** (`src/client/DynamicTable.ts`)
-- Schema-aware table client with runtime validation
-- Validates field types, required fields, and enum values based on TableDefinition
+- Schema-aware table client with comprehensive AppSheet field type validation
+- Validates all 27 AppSheet field types (Email, URL, Phone, Enum, EnumList, etc.)
+- Format validation (email addresses, URLs, phone numbers, dates, percentages)
+- Required field validation and enum value constraints
 - Created by SchemaManager, not instantiated directly
+
+**Validators** (`src/utils/validators/`)
+- **BaseTypeValidator**: JavaScript primitive type validation (string, number, boolean, array)
+- **FormatValidator**: Format-specific validation (Email, URL, Phone, Date, DateTime, Percent)
+- **AppSheetTypeValidator**: Main orchestrator for AppSheet field type validation
+- Modular, reusable validation logic across the codebase
 
 **SchemaLoader** (`src/utils/SchemaLoader.ts`)
 - Loads schema from YAML/JSON files
@@ -122,8 +130,11 @@ npx appsheet inspect --help  # After npm install (uses bin entry)
 ### CLI Tool
 
 **SchemaInspector** (`src/cli/SchemaInspector.ts`)
-- Introspects AppSheet tables by fetching sample data
-- Infers field types from actual data
+- Introspects AppSheet tables by analyzing up to 100 rows
+- Automatically detects all 27 AppSheet field types from actual data
+- Smart Enum detection: Identifies enum fields based on unique value ratio
+- Extracts `allowedValues` for Enum/EnumList fields automatically
+- Pattern detection for Email, URL, Phone, Date, DateTime, Percent
 - Guesses key fields (looks for: id, key, ID, Key, _RowNumber)
 - Converts table names to schema names (e.g., "extract_user" → "users")
 
@@ -139,20 +150,34 @@ CLI binary name: `appsheet` (defined in package.json bin field)
 
 ## Key Design Patterns
 
-### Schema Structure
+### Schema Structure (v2.0.0)
 ```yaml
 connections:
   <connection-name>:
     appId: ${ENV_VAR}
     applicationAccessKey: ${ENV_VAR}
-    runAsUserEmail: user@example.com  # Optional: global user for all operations in this connection
+    runAsUserEmail: user@example.com  # Optional: global user for all operations
     tables:
       <schema-table-name>:
         tableName: <actual-appsheet-table-name>
         keyField: <primary-key-field>
         fields:
-          <field-name>: <type>  # or full FieldDefinition object
+          <field-name>:
+            type: <AppSheetFieldType>  # Required: Text, Email, Number, Enum, etc.
+            required: <boolean>        # Optional: default false
+            allowedValues: [...]       # Optional: for Enum/EnumList
+            description: <string>      # Optional
 ```
+
+**AppSheet Field Types (27 total):**
+- **Core**: Text, Number, Date, DateTime, Time, Duration, YesNo
+- **Specialized Text**: Name, Email, URL, Phone, Address
+- **Specialized Numbers**: Decimal, Percent, Price
+- **Selection**: Enum, EnumList
+- **Media**: Image, File, Drawing, Signature
+- **Tracking**: ChangeCounter, ChangeTimestamp, ChangeLocation
+- **References**: Ref, RefList
+- **Special**: Color, Show
 
 ### Two Usage Patterns
 
@@ -174,11 +199,48 @@ const table = db.table<Type>('connection', 'tableName');
 await table.findAll();
 ```
 
+### Validation Examples
+
+**Schema Definition with AppSheet Types:**
+```yaml
+fields:
+  email:
+    type: Email
+    required: true
+  status:
+    type: Enum
+    required: true
+    allowedValues: ["Active", "Inactive", "Pending"]
+  tags:
+    type: EnumList
+    allowedValues: ["JavaScript", "TypeScript", "React"]
+  discount:
+    type: Percent
+    required: false
+  website:
+    type: URL
+```
+
+**Validation Errors:**
+```typescript
+// Invalid email format
+await table.add([{ email: 'invalid' }]);
+// ❌ ValidationError: Field "email" must be a valid email address
+
+// Invalid enum value
+await table.add([{ status: 'Unknown' }]);
+// ❌ ValidationError: Field "status" must be one of: Active, Inactive, Pending
+
+// Invalid percentage
+await table.add([{ discount: 1.5 }]);
+// ❌ ValidationError: Field "discount" must be between 0.00 and 1.00
+```
+
 ### Error Handling
 
 All errors extend `AppSheetError` with specific subtypes:
 - `AuthenticationError` (401/403)
-- `ValidationError` (400)
+- `ValidationError` (400) - Now includes field-level validation errors
 - `NotFoundError` (404)
 - `RateLimitError` (429)
 - `NetworkError` (no response)
@@ -215,6 +277,44 @@ Retry logic applies to network errors and 5xx server errors (max 3 attempts by d
 ```
 
 **Note**: The AppSheet API may return responses in either format. The AppSheetClient automatically normalizes both formats to the standard `{ Rows: [...], Warnings?: [...] }` structure for consistent handling.
+
+## Breaking Changes (v2.0.0)
+
+**⚠️ IMPORTANT**: Version 2.0.0 introduces breaking changes. See MIGRATION.md for upgrade guide.
+
+### Removed Features
+- ❌ Old generic types (`'string'`, `'number'`, `'boolean'`, `'date'`, `'array'`, `'object'`) are no longer supported
+- ❌ Shorthand string format for field definitions (`"email": "string"`) is no longer supported
+- ❌ `enum` property renamed to `allowedValues`
+
+### New Requirements
+- ✅ All fields must use full FieldDefinition object with `type` property
+- ✅ Only AppSheet-specific types are supported (Text, Email, Number, etc.)
+- ✅ Schema validation is stricter and more comprehensive
+
+### Migration Example
+```yaml
+# ❌ Old schema (v1.x) - NO LONGER WORKS
+fields:
+  email: string
+  age: number
+  status:
+    type: string
+    enum: ["Active", "Inactive"]
+
+# ✅ New schema (v2.0.0)
+fields:
+  email:
+    type: Email
+    required: true
+  age:
+    type: Number
+    required: false
+  status:
+    type: Enum
+    required: true
+    allowedValues: ["Active", "Inactive"]
+```
 
 ## Documentation
 
