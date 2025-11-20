@@ -60,7 +60,7 @@ export class SchemaInspector {
    */
   async inspectTable(tableName: string): Promise<TableInspectionResult> {
     try {
-      // Fetch some rows to infer field types
+      // Fetch rows to infer field types (limit to 100 for performance)
       const result = await this.client.find({
         tableName,
         // No selector = get all rows
@@ -75,20 +75,51 @@ export class SchemaInspector {
         };
       }
 
-      // Analyze first row for field types
-      const sampleRow = result.rows[0];
+      // Analyze all rows (or sample if too many)
+      const sampleRows = result.rows.slice(0, 100);
       const fields: Record<string, FieldDefinition> = {};
 
-      for (const [key, value] of Object.entries(sampleRow)) {
-        fields[key] = {
-          type: this.inferType(value),
+      // Get all field names from first row
+      const fieldNames = Object.keys(sampleRows[0]);
+
+      for (const fieldName of fieldNames) {
+        // Collect all values for this field
+        const values = sampleRows.map((row) => row[fieldName]).filter((v) => v !== null && v !== undefined);
+
+        if (values.length === 0) {
+          // No non-null values found
+          fields[fieldName] = {
+            type: 'Text',
+            required: false,
+          };
+          continue;
+        }
+
+        // Infer type from first non-null value
+        let inferredType = this.inferType(values[0]);
+
+        // Check if Text field might actually be an Enum based on unique values
+        if (inferredType === 'Text' && this.looksLikeEnum(values)) {
+          inferredType = 'Enum';
+        }
+
+        // Build field definition
+        const fieldDef: FieldDefinition = {
+          type: inferredType,
           required: false, // Cannot determine from data alone
         };
+
+        // Extract allowedValues for Enum/EnumList
+        if (inferredType === 'Enum' || inferredType === 'EnumList') {
+          fieldDef.allowedValues = this.extractAllowedValues(values, inferredType);
+        }
+
+        fields[fieldName] = fieldDef;
       }
 
       return {
         tableName,
-        keyField: this.guessKeyField(sampleRow),
+        keyField: this.guessKeyField(sampleRows[0]),
         fields,
       };
     } catch (error: any) {
@@ -97,7 +128,7 @@ export class SchemaInspector {
   }
 
   /**
-   * Infer AppSheet field type from value
+   * Infer AppSheet field type from value with improved heuristics
    */
   private inferType(value: any): AppSheetFieldType {
     if (value === null || value === undefined) {
@@ -108,42 +139,27 @@ export class SchemaInspector {
 
     // Number types
     if (type === 'number') {
-      // Check if it looks like a percent (0.00 to 1.00)
-      if (value >= 0 && value <= 1 && value !== 0 && value !== 1) {
+      // Check if it looks like a percent (0.00 to 1.00, excluding exact 0 and 1)
+      if (value > 0 && value < 1) {
         return 'Percent';
       }
       // Default to Number for all numeric values
       return 'Number';
     }
 
-    // Boolean
-    if (type === 'boolean') {
+    // Boolean or "Yes"/"No" strings
+    if (type === 'boolean' || value === 'Yes' || value === 'No') {
       return 'YesNo';
     }
 
-    // Arrays
+    // Arrays - could be EnumList
     if (Array.isArray(value)) {
-      return 'EnumList'; // Assume array is EnumList
+      return 'EnumList';
     }
 
-    // Check string patterns
+    // String pattern detection (order matters - most specific first)
     if (type === 'string') {
-      // Email pattern
-      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-        return 'Email';
-      }
-
-      // URL pattern
-      if (/^https?:\/\//i.test(value)) {
-        return 'URL';
-      }
-
-      // Phone pattern (basic)
-      if (/^[\d\s+\-()]{7,}$/.test(value)) {
-        return 'Phone';
-      }
-
-      // DateTime pattern (ISO 8601 with time)
+      // DateTime pattern (ISO 8601 with time) - check before Date
       if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
         return 'DateTime';
       }
@@ -152,10 +168,84 @@ export class SchemaInspector {
       if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
         return 'Date';
       }
+
+      // Email pattern
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        return 'Email';
+      }
+
+      // URL pattern (http/https)
+      if (/^https?:\/\//i.test(value)) {
+        return 'URL';
+      }
+
+      // Phone pattern - more restrictive to avoid false positives
+      // Must have at least 7 digits, may contain spaces, +, -, (, )
+      if (/^[\d\s+\-()]{10,}$/.test(value) && /\d{7,}/.test(value.replace(/[\s+\-()]/g, ''))) {
+        return 'Phone';
+      }
+
+      // If string has very few unique values across dataset, it might be an Enum
+      // (This will be determined by caller based on analyzing multiple rows)
     }
 
     // Default to Text for strings and unknown types
     return 'Text';
+  }
+
+  /**
+   * Check if a text field looks like an Enum based on unique values
+   *
+   * Heuristic: If there are relatively few unique values compared to total values,
+   * it's likely an enum field (e.g., status, category, priority).
+   */
+  private looksLikeEnum(values: any[]): boolean {
+    // Only consider string values
+    const stringValues = values.filter((v) => typeof v === 'string');
+    if (stringValues.length === 0) {
+      return false;
+    }
+
+    // Get unique values
+    const uniqueValues = new Set(stringValues);
+
+    // Heuristics:
+    // 1. If less than 10 unique values total, likely an enum
+    // 2. If unique values are less than 20% of total values, likely an enum
+    // 3. Must have at least 2 samples
+    if (stringValues.length < 2) {
+      return false;
+    }
+
+    if (uniqueValues.size <= 10) {
+      return true;
+    }
+
+    const uniqueRatio = uniqueValues.size / stringValues.length;
+    return uniqueRatio < 0.2;
+  }
+
+  /**
+   * Extract allowed values for Enum/EnumList fields
+   */
+  private extractAllowedValues(values: any[], fieldType: AppSheetFieldType): string[] {
+    const uniqueValues = new Set<string>();
+
+    for (const value of values) {
+      if (fieldType === 'EnumList' && Array.isArray(value)) {
+        // For EnumList, collect all values from all arrays
+        value.forEach((v) => {
+          if (typeof v === 'string') {
+            uniqueValues.add(v);
+          }
+        });
+      } else if (fieldType === 'Enum' && typeof value === 'string') {
+        // For Enum, collect unique string values
+        uniqueValues.add(value);
+      }
+    }
+
+    return Array.from(uniqueValues).sort();
   }
 
   /**
