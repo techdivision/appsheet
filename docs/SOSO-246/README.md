@@ -4,6 +4,9 @@
 **JIRA:** https://techdivision.atlassian.net/browse/SOSO-246
 **Repository:** https://github.com/techdivision/appsheet-mcp-server
 **Branch:** staging
+**Aktualisiert:** 2025-11-21 (Post-SOSO-247 v2.0.0)
+
+> **⚠️ Hinweis:** Alle Beispiele in dieser Dokumentation wurden auf die v2.0.0 AppSheet field types aktualisiert (SOSO-247).
 
 ---
 

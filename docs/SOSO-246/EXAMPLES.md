@@ -169,7 +169,7 @@ main();
 import 'reflect-metadata';
 import { setupTestContainer, SchemaConfig } from '@techdivision/appsheet';
 
-// Test schema
+// Test schema (v2.0.0 format with AppSheet field types)
 const testSchema: SchemaConfig = {
   connections: {
     main: {
@@ -180,20 +180,24 @@ const testSchema: SchemaConfig = {
           tableName: 'users',
           keyField: 'id',
           fields: {
-            id: 'string',
-            name: 'string',
-            email: 'string',
-            role: { type: 'string', enum: ['admin', 'user'] }
+            id: { type: 'Text', required: true },
+            name: { type: 'Name', required: true },
+            email: { type: 'Email', required: true },
+            role: {
+              type: 'Enum',
+              required: true,
+              allowedValues: ['admin', 'user']
+            }
           }
         },
         orders: {
           tableName: 'orders',
           keyField: 'id',
           fields: {
-            id: 'string',
-            user_id: 'string',
-            total: 'number',
-            status: 'string'
+            id: { type: 'Text', required: true },
+            user_id: { type: 'Text', required: true },
+            total: { type: 'Price', required: true },
+            status: { type: 'Text', required: false }
           }
         }
       }

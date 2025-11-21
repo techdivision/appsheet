@@ -4,6 +4,12 @@
 **Projekt:** @techdivision/appsheet
 **Status:** Konzeptphase
 **Datum:** 2025-01-20
+**Aktualisiert:** 2025-11-21 (Post-SOSO-247 v2.0.0)
+
+> **⚠️ Wichtig:** Dieses Dokument berücksichtigt die Änderungen aus SOSO-247 (v2.0.0):
+> - Alle Schema-Beispiele verwenden AppSheet field types (Text, Email, Enum, etc.)
+> - Validators (AppSheetTypeValidator, FormatValidator) sind stateless und benötigen keine DI
+> - FieldDefinition verwendet `allowedValues` statt `enum`
 
 ---
 
@@ -312,9 +318,48 @@ export class DynamicTable<T = Record<string, any>> {
 
 ---
 
+#### 3.8 Validation Layer - NO DI Required
+
+**Validators aus SOSO-247 (v2.0.0):**
+
+Die neuen Validator-Klassen sind **stateless** und verwenden **statische Methoden**. Sie benötigen **KEINE Dependency Injection**:
+
+```typescript
+// src/utils/validators/AppSheetTypeValidator.ts
+export class AppSheetTypeValidator {
+  // Statische Methoden - keine DI nötig
+  static validate(fieldName: string, fieldType: AppSheetFieldType, value: any, rowIndex: number): void
+  static validateEnum(...): void
+  static validateRequired(...): void
+}
+
+// src/utils/validators/FormatValidator.ts
+export class FormatValidator {
+  // Statische Methoden - keine DI nötig
+  static validateEmail(fieldName: string, value: string, rowIndex: number): void
+  static validateURL(...): void
+  static validatePhone(...): void
+}
+
+// src/utils/validators/BaseTypeValidator.ts
+export class BaseTypeValidator {
+  // Statische Methoden - keine DI nötig
+  static validateString(...): void
+  static validateNumber(...): void
+}
+```
+
+**Begründung:**
+- Validators sind **pure functions** ohne State
+- Keine Dependencies auf externe Services
+- Performance-optimal durch statische Methoden
+- Einfach testbar ohne DI-Setup
+
+---
+
 ### Phase 4: DI Helper & Utilities (Tag 3)
 
-#### 3.8 DI Helper Module
+#### 3.9 DI Helper Module
 
 **Neues Modul: src/di/index.ts**
 
