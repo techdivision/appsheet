@@ -7,114 +7,119 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Initial project setup
-- AppSheetClient with full CRUD operations
-- MockAppSheetClient for testing
-- Schema-based usage with SchemaLoader and SchemaManager
-- DynamicTable with runtime validation
-- CLI tool for schema generation (inspect, init, add-table, validate)
-- Multi-instance connection management
-- runAsUserEmail feature for user context
-- Comprehensive JSDoc documentation
-- Jest test suite (48 tests)
-- GitHub Actions CI workflow
-- Semantic versioning setup
-
-### Documentation
-- README.md with usage examples
-- CONTRIBUTING.md with versioning guidelines
-- CLAUDE.md for Claude Code integration
-- TypeDoc API documentation
-- Comprehensive test documentation
-
-## [0.1.0] - 2025-11-14
+## [2.1.0] - 2024-11-24
 
 ### Added
-- Initial release
-- Basic AppSheet CRUD operations
-- TypeScript support
-- Schema management
 
----
+- **Per-Request User Context Support** ([#3](https://github.com/techdivision/appsheet/issues/3))
+  - Added optional `runAsUserEmail` parameter to `ConnectionManager.get()` method
+  - Added optional `runAsUserEmail` parameter to `SchemaManager.table()` method
+  - Enables multi-tenant MCP servers with per-request user context
+  - User-specific clients are created on-the-fly (lightweight, no caching)
+  - Overrides global `runAsUserEmail` from schema when provided
+  - 100% backward compatible - existing code works without changes
 
-## Version Format
+- **Enhanced Schema Configuration**
+  - Added optional `runAsUserEmail` field to `ConnectionDefinition` interface
+  - Allows setting global default user at connection level in schema
 
-- **[MAJOR.MINOR.PATCH]** - Released versions
-- **[Unreleased]** - Upcoming changes not yet released
+- **Comprehensive Test Coverage**
+  - Added 13 tests for `ConnectionManager` per-request user context
+  - Added 18 tests for `SchemaManager` per-request user context
+  - Total test suite: 157 tests across 6 test suites
 
-## Change Categories
+- **Documentation Updates**
+  - Added "Per-Request User Context" section to CLAUDE.md
+  - Added "Multi-Tenant MCP Server" usage pattern
+  - Updated component descriptions with new feature details
+  - Added usage examples for ConnectionManager and SchemaManager
 
-- **Added** - New features
-- **Changed** - Changes in existing functionality
-- **Deprecated** - Soon-to-be removed features
-- **Removed** - Removed features
-- **Fixed** - Bug fixes
-- **Security** - Security fixes
+### Changed
 
-## Examples
-
-### Patch Release (0.1.0 → 0.1.1)
-
-```markdown
-## [0.1.1] - 2025-11-15
+- **SchemaManager Architecture**
+  - Removed table client caching - `DynamicTable` instances now created on-the-fly
+  - Simplified `initialize()` method - only registers connections (no table pre-creation)
+  - Updated `getConnections()` and `getTables()` to work without cache
+  - More efficient for per-request user context use cases
 
 ### Fixed
-- Fixed selector parsing for date fields
-- Corrected error handling in retry logic
 
-### Documentation
-- Updated API documentation
-```
+- Fixed package.json version number ([#4](https://github.com/techdivision/appsheet/issues/4))
+  - Version corrected from `0.2.0` to `2.1.0` (proper SemVer)
+  - Reflects actual major version 2.0.0 release with breaking changes
 
-### Minor Release (0.1.0 → 0.2.0)
+### Technical Details
 
-```markdown
-## [0.2.0] - 2025-11-20
+- **Breaking Changes**: None (fully backward compatible)
+- **SemVer Level**: MINOR (new features, no breaking changes)
+- **Migration Required**: No
+- **Dependencies**: Added `ts-semver-detector@^0.3.1` (dev dependency)
 
-### Added
-- New `findByIds()` method for batch retrieval
-- Support for custom request headers
-- Connection pooling support
-
-### Changed
-- Improved error messages with more context
-
-### Deprecated
-- `oldMethod()` will be removed in v1.0.0
-```
-
-### Major Release (0.2.0 → 1.0.0)
-
-```markdown
-## [1.0.0] - 2025-12-01
+## [2.0.0] - 2024-11-20
 
 ### Added
-- Stable API release
-- Full TypeScript type coverage
+
+- **AppSheet Field Type System** (SOSO-247)
+  - Support for all 27 AppSheet-specific field types
+  - Core types: Text, Number, Date, DateTime, Time, Duration, YesNo
+  - Specialized text: Name, Email, URL, Phone, Address
+  - Specialized numbers: Decimal, Percent, Price
+  - Selection types: Enum, EnumList
+  - Media types: Image, File, Drawing, Signature
+  - Tracking types: ChangeCounter, ChangeTimestamp, ChangeLocation
+  - Reference types: Ref, RefList
+  - Special types: Color, Show
+
+- **Enhanced Validation System**
+  - Format validation for Email, URL, Phone fields
+  - Range validation for Percent type (0.00 to 1.00)
+  - Enum/EnumList value validation with `allowedValues`
+  - Required field validation for add operations
+  - Type-specific validation for all AppSheet types
+
+- **Validator Architecture**
+  - `BaseTypeValidator`: JavaScript primitive type validation
+  - `FormatValidator`: Format-specific validation (Email, URL, Phone, Date, DateTime, Percent)
+  - `AppSheetTypeValidator`: Main orchestrator for field type validation
+
+- **SchemaInspector Enhancements**
+  - Automatic detection of all 27 AppSheet field types from data
+  - Smart Enum detection based on unique value ratio
+  - Pattern detection for Email, URL, Phone, Date, DateTime, Percent
+  - Automatic extraction of `allowedValues` for Enum/EnumList fields
 
 ### Changed
-- **BREAKING**: Client methods now return typed responses
-- **BREAKING**: Renamed `findAll()` to `find()` with options
 
-### Removed
-- **BREAKING**: Removed deprecated `oldMethod()`
+- **BREAKING**: Schema format now requires AppSheet-specific types
+  - Old generic types (`string`, `number`, `boolean`, etc.) no longer supported
+  - All fields must use full `FieldDefinition` object with `type` property
+  - Shorthand string format (`"email": "string"`) removed
+  - `enum` property renamed to `allowedValues`
+
+- **BREAKING**: Type validation is stricter and more comprehensive
+  - All field values validated against AppSheet type constraints
+  - Format validation enforced for specialized types
 
 ### Migration Guide
 
-#### Client Method Changes
+See [MIGRATION.md](./MIGRATION.md) for detailed upgrade instructions from v1.x to v2.0.0.
 
-Before (0.x.x):
-```typescript
-const rows = await client.findAll('Users');
-```
+## [1.x.x] - Previous Releases
 
-After (1.0.0):
-```typescript
-const result = await client.find({ tableName: 'Users' });
-const rows = result.rows;
-```
-```
+For changes in version 1.x.x, please refer to git history.
 
-[Unreleased]: https://github.com/techdivision/appsheet/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/techdivision/appsheet/releases/tag/v0.1.0
+---
+
+## Links
+
+- [GitHub Repository](https://github.com/techdivision/appsheet)
+- [Issue Tracker](https://github.com/techdivision/appsheet/issues)
+- [Documentation](./CLAUDE.md)
+
+## SemVer Policy
+
+This project follows [Semantic Versioning](https://semver.org/):
+
+- **MAJOR** version: Breaking changes, incompatible API changes
+- **MINOR** version: New features, backward-compatible additions
+- **PATCH** version: Bug fixes, backward-compatible fixes
