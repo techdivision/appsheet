@@ -79,30 +79,54 @@ export class ConnectionManager {
   }
 
   /**
-   * Get a registered client by name.
+   * Get a registered client by name, optionally for a specific user.
    *
-   * Retrieves an AppSheetClient instance that was previously registered.
-   * The client can be used to perform CRUD operations on the connected app.
+   * When runAsUserEmail is provided, creates a new AppSheetClient instance
+   * configured for that user. The user-specific client is created on-the-fly
+   * and not cached (lightweight operation).
+   *
+   * When runAsUserEmail is not provided, returns the default registered client.
    *
    * @param name - The unique name of the connection to retrieve
+   * @param runAsUserEmail - Optional: Email of the user to execute operations as
    * @returns The AppSheetClient instance for the specified connection
    * @throws {Error} If no connection with the given name exists
    *
    * @example
    * ```typescript
+   * // Default behavior (existing code, backward compatible)
    * const client = manager.get('worklog');
    * const records = await client.findAll('worklogs');
+   *
+   * // User-specific behavior (new)
+   * const userClient = manager.get('worklog', 'user@example.com');
+   * const userRecords = await userClient.findAll('worklogs');
    * ```
    */
-  get(name: string): AppSheetClient {
-    const client = this.connections.get(name);
-    if (!client) {
+  get(name: string, runAsUserEmail?: string): AppSheetClient {
+    const baseClient = this.connections.get(name);
+    if (!baseClient) {
       const available = [...this.connections.keys()].join(', ') || 'none';
       throw new Error(
         `Connection "${name}" not found. Available connections: ${available}`
       );
     }
-    return client;
+
+    // No user specified - return default client (backward compatible)
+    if (!runAsUserEmail) {
+      return baseClient;
+    }
+
+    // User specified - create user-specific client on-the-fly
+    const config = baseClient.getConfig();
+    return new AppSheetClient({
+      appId: config.appId,
+      applicationAccessKey: config.applicationAccessKey,
+      baseUrl: config.baseUrl,
+      timeout: config.timeout,
+      retryAttempts: config.retryAttempts,
+      runAsUserEmail, // Override with user-specific email
+    });
   }
 
   /**

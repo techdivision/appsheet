@@ -155,6 +155,9 @@ export interface ConnectionDefinition {
   /** Optional request timeout */
   timeout?: number;
 
+  /** Optional global user email for all operations on this connection */
+  runAsUserEmail?: string;
+
   /** Table definitions for this connection */
   tables: Record<string, TableDefinition>;
 }
