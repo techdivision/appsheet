@@ -118,13 +118,21 @@ npx appsheet inspect --help  # After npm install (uses bin entry)
 - Central management class that:
   1. Validates loaded schema
   2. Initializes ConnectionManager with all connections
-  3. Creates DynamicTable instances for each table
-  4. Provides `table<T>(connection, tableName)` method
+  3. Creates DynamicTable instances on-the-fly (no caching)
+  4. Provides `table<T>(connection, tableName, runAsUserEmail?)` method
+- **Per-Request User Context**: Optional `runAsUserEmail` parameter on `table()` method
+  - Creates user-specific table clients on-the-fly without caching
+  - Enables multi-tenant MCP servers with per-request user context
+  - Backward compatible: omit parameter for default behavior
 - Entry point for schema-based usage pattern
 
 **ConnectionManager** (`src/utils/ConnectionManager.ts`)
 - Manages multiple AppSheet app connections by name
 - Enables multi-instance support (multiple apps in one project)
+- **Per-Request User Context**: Optional `runAsUserEmail` parameter on `get()` method
+  - Creates user-specific clients on-the-fly without caching
+  - Overrides global `runAsUserEmail` from schema when provided
+  - Backward compatible: omit parameter to get default client
 - Provides health check functionality
 
 ### CLI Tool
@@ -195,8 +203,31 @@ await client.findAll('TableName');
 ```typescript
 const schema = SchemaLoader.fromYaml('./config/schema.yaml');
 const db = new SchemaManager(schema);
+
+// Default behavior (uses global user from schema if configured)
 const table = db.table<Type>('connection', 'tableName');
 await table.findAll();
+
+// Per-request user context (new in v2.1.0)
+const userTable = db.table<Type>('connection', 'tableName', 'user@example.com');
+await userTable.findAll();  // Executes as user@example.com
+```
+
+**Pattern 3: Multi-Tenant MCP Server** (New in v2.1.0)
+```typescript
+// MCP Server with per-request user context
+const schema = SchemaLoader.fromYaml('./config/schema.yaml');
+const db = new SchemaManager(schema);
+
+// Handler for MCP request with authenticated user
+async function handleToolCall(toolName: string, params: any, userEmail: string) {
+  // Create user-specific table client on-the-fly
+  const table = db.table('worklog', 'worklogs', userEmail);
+
+  // All operations execute with user's permissions
+  const worklogs = await table.findAll();
+  return worklogs;
+}
 ```
 
 ### Validation Examples
@@ -234,6 +265,73 @@ await table.add([{ status: 'Unknown' }]);
 // Invalid percentage
 await table.add([{ discount: 1.5 }]);
 // ❌ ValidationError: Field "discount" must be between 0.00 and 1.00
+```
+
+### Per-Request User Context (v2.1.0)
+
+**Feature**: Execute operations with per-request user context in multi-tenant environments.
+
+**Use Cases**:
+- Multi-tenant MCP servers where different authenticated users make requests
+- Row-level security and permissions enforcement by AppSheet
+- User-specific audit trails and tracking
+- User-based data filtering and access control
+
+**ConnectionManager Usage**:
+```typescript
+const manager = new ConnectionManager();
+manager.register({
+  name: 'worklog',
+  appId: 'app-id',
+  applicationAccessKey: 'key',
+  runAsUserEmail: 'default@example.com'  // Optional global default
+});
+
+// Get default client (uses global user or no user)
+const defaultClient = manager.get('worklog');
+
+// Get user-specific client (creates new instance with user context)
+const userClient = manager.get('worklog', 'user@example.com');
+await userClient.findAll('worklogs');  // Executes as user@example.com
+```
+
+**SchemaManager Usage**:
+```typescript
+const schema = SchemaLoader.fromYaml('./config/schema.yaml');
+const db = new SchemaManager(schema);
+
+// Get default table client
+const table = db.table('worklog', 'worklogs');
+
+// Get user-specific table client (creates new instance)
+const userTable = db.table('worklog', 'worklogs', 'user@example.com');
+await userTable.findAll();  // Executes as user@example.com
+```
+
+**Important Notes**:
+- User-specific clients are created on-the-fly (not cached) - this is a lightweight operation
+- Parameter `runAsUserEmail` overrides any global `runAsUserEmail` from schema
+- Omitting the parameter returns default client (backward compatible)
+- Each call with `runAsUserEmail` creates a new client instance
+- DynamicTable and AppSheetClient are lightweight, so on-the-fly creation is efficient
+
+**MCP Server Example**:
+```typescript
+// Single SchemaManager instance for entire server
+const db = new SchemaManager(SchemaLoader.fromYaml('./schema.yaml'));
+
+// MCP tool handler with per-request user context
+server.tool('list_worklogs', async (params, context) => {
+  // Extract user from MCP context (authentication handled by MCP framework)
+  const userEmail = context.user?.email;
+
+  // Create user-specific table client
+  const table = db.table('worklog', 'worklogs', userEmail);
+
+  // All operations execute with user's AppSheet permissions
+  const worklogs = await table.findAll();
+  return worklogs;
+});
 ```
 
 ### Error Handling
