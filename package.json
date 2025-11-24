@@ -47,6 +47,7 @@
     "jest": "^29.0.0",
     "prettier": "^3.0.0",
     "ts-jest": "^29.0.0",
+    "ts-semver-detector": "^0.3.1",
     "typedoc": "^0.28.14",
     "typescript": "^5.0.0"
   },
