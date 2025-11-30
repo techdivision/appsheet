@@ -1,5 +1,5 @@
 /**
- * Test Suite: AppSheetClient - runAsUserEmail Functionality
+ * Test Suite: AppSheetClient v3.0.0 - runAsUserEmail Functionality
  *
  * Integration test suite for the AppSheetClient class that verifies the
  * runAsUserEmail feature works correctly with the real HTTP client (mocked axios).
@@ -9,17 +9,19 @@
  * testing how the runAsUserEmail configuration is propagated to API requests.
  *
  * Test areas:
- * - Global runAsUserEmail configuration (applied to all operations)
+ * - v3.0.0 constructor (ConnectionDefinition, runAsUserEmail)
+ * - runAsUserEmail propagation to all operations
  * - Per-operation runAsUserEmail override (operation-specific user context)
  * - Property merging (combining runAsUserEmail with other request properties)
  * - Convenience methods (simplified API with runAsUserEmail support)
- * - Configuration retrieval (getConfig() method)
+ * - getTable() method (v3.0.0)
  *
  * @module tests/client
  */
 
 import axios from 'axios';
 import { AppSheetClient } from '../../src/client/AppSheetClient';
+import { ConnectionDefinition } from '../../src/types';
 
 /**
  * Mock axios module to intercept HTTP requests without hitting real API.
@@ -29,7 +31,7 @@ jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 /**
- * Test Suite: AppSheetClient - runAsUserEmail Feature
+ * Test Suite: AppSheetClient - runAsUserEmail Feature (v3.0.0)
  *
  * Tests the real AppSheetClient implementation (not the mock) by verifying
  * HTTP request payloads contain correct runAsUserEmail values in the
@@ -37,12 +39,13 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
  */
 describe('AppSheetClient - runAsUserEmail', () => {
   /**
-   * Base configuration for creating AppSheetClient instances in tests.
-   * Minimal config with only required fields.
+   * Base ConnectionDefinition for creating AppSheetClient instances in tests.
+   * v3.0.0 requires ConnectionDefinition with tables property.
    */
-  const mockConfig = {
+  const mockConnectionDef: ConnectionDefinition = {
     appId: 'test-app-id',
     applicationAccessKey: 'test-key',
+    tables: {},
   };
 
   /**
@@ -92,11 +95,8 @@ describe('AppSheetClient - runAsUserEmail', () => {
      *
      * Use case: Setting up audit trail / user context for all operations
      */
-    it('should include RunAsUserEmail in Properties when globally configured', async () => {
-      const client = new AppSheetClient({
-        ...mockConfig,
-        runAsUserEmail: 'global@example.com',
-      });
+    it('should include RunAsUserEmail in Properties when configured', async () => {
+      const client = new AppSheetClient(mockConnectionDef, 'global@example.com');
 
       mockAxiosInstance.post.mockResolvedValue({
         data: { Rows: [] },
@@ -115,20 +115,13 @@ describe('AppSheetClient - runAsUserEmail', () => {
     });
 
     /**
-     * Test: No runAsUserEmail When Not Configured
+     * Test: runAsUserEmail is always required in v3.0.0
      *
-     * Verifies that when runAsUserEmail is not configured, the HTTP request
-     * Properties field remains empty, avoiding unnecessary API parameters.
-     *
-     * Expected behavior:
-     * - Properties object exists but is empty
-     * - No RunAsUserEmail field is included
-     * - API request is minimal and clean
-     *
-     * Use case: Operations not requiring user context
+     * In v3.0.0, runAsUserEmail is a required constructor parameter.
+     * This test verifies it's always included in requests.
      */
-    it('should not include RunAsUserEmail when not configured', async () => {
-      const client = new AppSheetClient(mockConfig);
+    it('should always include RunAsUserEmail (required in v3.0.0)', async () => {
+      const client = new AppSheetClient(mockConnectionDef, 'required@example.com');
 
       mockAxiosInstance.post.mockResolvedValue({
         data: { Rows: [] },
@@ -139,7 +132,9 @@ describe('AppSheetClient - runAsUserEmail', () => {
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          Properties: {},
+          Properties: expect.objectContaining({
+            RunAsUserEmail: 'required@example.com',
+          }),
         })
       );
     });
@@ -165,10 +160,7 @@ describe('AppSheetClient - runAsUserEmail', () => {
      * Use case: Audit trail showing which admin user created new records
      */
     it('should apply global runAsUserEmail to add operations', async () => {
-      const client = new AppSheetClient({
-        ...mockConfig,
-        runAsUserEmail: 'admin@example.com',
-      });
+      const client = new AppSheetClient(mockConnectionDef, 'admin@example.com');
 
       mockAxiosInstance.post.mockResolvedValue({
         data: { Rows: [{ id: '123' }] },
@@ -212,10 +204,7 @@ describe('AppSheetClient - runAsUserEmail', () => {
      * Note: AppSheet API uses 'Edit' action name for update operations
      */
     it('should apply global runAsUserEmail to update operations', async () => {
-      const client = new AppSheetClient({
-        ...mockConfig,
-        runAsUserEmail: 'editor@example.com',
-      });
+      const client = new AppSheetClient(mockConnectionDef, 'editor@example.com');
 
       mockAxiosInstance.post.mockResolvedValue({
         data: { Rows: [{ id: '123', name: 'Updated' }] },
@@ -260,10 +249,7 @@ describe('AppSheetClient - runAsUserEmail', () => {
      * Important: Delete operations typically return empty Rows array
      */
     it('should apply global runAsUserEmail to delete operations', async () => {
-      const client = new AppSheetClient({
-        ...mockConfig,
-        runAsUserEmail: 'deleter@example.com',
-      });
+      const client = new AppSheetClient(mockConnectionDef, 'deleter@example.com');
 
       mockAxiosInstance.post.mockResolvedValue({
         data: { Rows: [] },
@@ -324,10 +310,7 @@ describe('AppSheetClient - runAsUserEmail', () => {
      * or audit trail purposes.
      */
     it('should allow per-operation override of global runAsUserEmail', async () => {
-      const client = new AppSheetClient({
-        ...mockConfig,
-        runAsUserEmail: 'global@example.com',
-      });
+      const client = new AppSheetClient(mockConnectionDef, 'global@example.com');
 
       mockAxiosInstance.post.mockResolvedValue({
         data: { Rows: [{ id: '123' }] },
@@ -374,10 +357,7 @@ describe('AppSheetClient - runAsUserEmail', () => {
      * like localization settings, timezone, or custom AppSheet properties.
      */
     it('should merge per-operation properties with global runAsUserEmail', async () => {
-      const client = new AppSheetClient({
-        ...mockConfig,
-        runAsUserEmail: 'global@example.com',
-      });
+      const client = new AppSheetClient(mockConnectionDef, 'global@example.com');
 
       mockAxiosInstance.post.mockResolvedValue({
         data: { Rows: [] },
@@ -430,10 +410,7 @@ describe('AppSheetClient - runAsUserEmail', () => {
      * rows in Find operations using AppSheet's expression syntax.
      */
     it('should handle selector and runAsUserEmail together in find operations', async () => {
-      const client = new AppSheetClient({
-        ...mockConfig,
-        runAsUserEmail: 'finder@example.com',
-      });
+      const client = new AppSheetClient(mockConnectionDef, 'finder@example.com');
 
       mockAxiosInstance.post.mockResolvedValue({
         data: { Rows: [] },
@@ -500,10 +477,7 @@ describe('AppSheetClient - runAsUserEmail', () => {
      * - Full API: client.find({ tableName: 'Users' })
      */
     it('should apply runAsUserEmail to findAll convenience method', async () => {
-      const client = new AppSheetClient({
-        ...mockConfig,
-        runAsUserEmail: 'reader@example.com',
-      });
+      const client = new AppSheetClient(mockConnectionDef, 'reader@example.com');
 
       mockAxiosInstance.post.mockResolvedValue({
         data: { Rows: [{ id: '1' }, { id: '2' }] },
@@ -548,10 +522,7 @@ describe('AppSheetClient - runAsUserEmail', () => {
      * - Full API: client.find({ tableName: 'Users', selector: '[Email] = "john@example.com"' }).then(r => r[0] || null)
      */
     it('should apply runAsUserEmail to findOne convenience method', async () => {
-      const client = new AppSheetClient({
-        ...mockConfig,
-        runAsUserEmail: 'reader@example.com',
-      });
+      const client = new AppSheetClient(mockConnectionDef, 'reader@example.com');
 
       mockAxiosInstance.post.mockResolvedValue({
         data: { Rows: [{ id: '123', name: 'John' }] },
@@ -596,10 +567,7 @@ describe('AppSheetClient - runAsUserEmail', () => {
      * - Full API: client.add({ tableName: 'Users', rows: [{ name: 'Jane' }] }).then(r => r[0])
      */
     it('should apply runAsUserEmail to addOne convenience method', async () => {
-      const client = new AppSheetClient({
-        ...mockConfig,
-        runAsUserEmail: 'creator@example.com',
-      });
+      const client = new AppSheetClient(mockConnectionDef, 'creator@example.com');
 
       mockAxiosInstance.post.mockResolvedValue({
         data: { Rows: [{ id: '123', name: 'Jane' }] },
@@ -643,10 +611,7 @@ describe('AppSheetClient - runAsUserEmail', () => {
      * - Full API: client.update({ tableName: 'Users', rows: [{ id: '123', name: 'Updated' }] }).then(r => r[0])
      */
     it('should apply runAsUserEmail to updateOne convenience method', async () => {
-      const client = new AppSheetClient({
-        ...mockConfig,
-        runAsUserEmail: 'updater@example.com',
-      });
+      const client = new AppSheetClient(mockConnectionDef, 'updater@example.com');
 
       mockAxiosInstance.post.mockResolvedValue({
         data: { Rows: [{ id: '123', name: 'Updated' }] },
@@ -690,10 +655,7 @@ describe('AppSheetClient - runAsUserEmail', () => {
      * - Full API: client.delete({ tableName: 'Users', rows: [{ id: '123' }] }).then(r => r.success)
      */
     it('should apply runAsUserEmail to deleteOne convenience method', async () => {
-      const client = new AppSheetClient({
-        ...mockConfig,
-        runAsUserEmail: 'deleter@example.com',
-      });
+      const client = new AppSheetClient(mockConnectionDef, 'deleter@example.com');
 
       mockAxiosInstance.post.mockResolvedValue({
         data: { Rows: [] },
@@ -713,82 +675,92 @@ describe('AppSheetClient - runAsUserEmail', () => {
   });
 
   /**
-   * Test Suite: Configuration Retrieval
+   * Test Suite: getTable() Method (v3.0.0)
    *
-   * Verifies that the getConfig() method correctly returns the client's
-   * configuration including the runAsUserEmail setting if configured.
-   *
-   * This allows users to:
-   * - Inspect the current configuration at runtime
-   * - Verify runAsUserEmail is set correctly
-   * - Debug configuration issues
-   * - Clone or modify configuration for new client instances
+   * Verifies that the getTable() method correctly returns TableDefinitions
+   * from the ConnectionDefinition for use with DynamicTableFactory.
    */
-  describe('Configuration retrieval', () => {
+  describe('getTable() method', () => {
     /**
-     * Test: getConfig() Includes runAsUserEmail When Configured
-     *
-     * Verifies that the getConfig() method returns the client's configuration
-     * including the runAsUserEmail setting when it is configured.
-     *
-     * Test approach:
-     * 1. Create client with runAsUserEmail='test@example.com'
-     * 2. Call getConfig() method
-     * 3. Verify returned config object includes runAsUserEmail property
-     * 4. Verify runAsUserEmail value matches configured value
-     *
-     * Expected behavior:
-     * - getConfig() returns an object with all client configuration
-     * - config.runAsUserEmail equals 'test@example.com'
-     * - Configuration is readable at runtime
-     * - Other config fields (appId, applicationAccessKey) are also present
-     *
-     * Use case: Inspecting configuration at runtime for debugging, logging,
-     * or creating new client instances with modified configuration.
-     *
-     * Note: The returned config is readonly to prevent accidental modification.
+     * ConnectionDefinition with tables for testing getTable()
      */
-    it('should include runAsUserEmail in getConfig() result', () => {
-      const client = new AppSheetClient({
-        ...mockConfig,
-        runAsUserEmail: 'test@example.com',
+    const connDefWithTables: ConnectionDefinition = {
+      appId: 'test-app-id',
+      applicationAccessKey: 'test-key',
+      tables: {
+        users: {
+          tableName: 'extract_user',
+          keyField: 'id',
+          fields: {
+            id: { type: 'Text', required: true },
+            email: { type: 'Email', required: true },
+          },
+        },
+        products: {
+          tableName: 'extract_product',
+          keyField: 'product_id',
+          fields: {
+            product_id: { type: 'Text', required: true },
+            name: { type: 'Text', required: true },
+          },
+        },
+      },
+    };
+
+    /**
+     * Test: getTable() returns TableDefinition for existing table
+     */
+    it('should return TableDefinition for existing table', () => {
+      const client = new AppSheetClient(connDefWithTables, 'test@example.com');
+
+      const tableDef = client.getTable('users');
+
+      expect(tableDef).toEqual({
+        tableName: 'extract_user',
+        keyField: 'id',
+        fields: {
+          id: { type: 'Text', required: true },
+          email: { type: 'Email', required: true },
+        },
       });
-
-      const config = client.getConfig();
-
-      expect(config.runAsUserEmail).toBe('test@example.com');
     });
 
     /**
-     * Test: getConfig() Returns Undefined runAsUserEmail When Not Set
-     *
-     * Verifies that when runAsUserEmail is not configured during client
-     * initialization, the getConfig() method returns undefined for this
-     * property rather than a default value or empty string.
-     *
-     * Test approach:
-     * 1. Create client without runAsUserEmail configuration
-     * 2. Call getConfig() method
-     * 3. Verify config.runAsUserEmail is undefined
-     *
-     * Expected behavior:
-     * - getConfig() returns an object with all required configuration
-     * - config.runAsUserEmail is undefined (not null, not empty string)
-     * - Other config fields (appId, applicationAccessKey) are present
-     * - Client functions normally without runAsUserEmail
-     *
-     * Use case: Clients that don't require user context can omit
-     * runAsUserEmail, and this is reflected in getConfig() output.
-     *
-     * Important: Undefined means the feature is not configured, which is
-     * different from an empty string or null value.
+     * Test: getTable() returns correct TableDefinition for different tables
      */
-    it('should have undefined runAsUserEmail in getConfig() when not set', () => {
-      const client = new AppSheetClient(mockConfig);
+    it('should return correct TableDefinition for different tables', () => {
+      const client = new AppSheetClient(connDefWithTables, 'test@example.com');
 
-      const config = client.getConfig();
+      const usersDef = client.getTable('users');
+      const productsDef = client.getTable('products');
 
-      expect(config.runAsUserEmail).toBeUndefined();
+      expect(usersDef.tableName).toBe('extract_user');
+      expect(usersDef.keyField).toBe('id');
+
+      expect(productsDef.tableName).toBe('extract_product');
+      expect(productsDef.keyField).toBe('product_id');
+    });
+
+    /**
+     * Test: getTable() throws Error for non-existent table
+     */
+    it('should throw Error for non-existent table', () => {
+      const client = new AppSheetClient(connDefWithTables, 'test@example.com');
+
+      expect(() => client.getTable('nonexistent')).toThrow(
+        'Table "nonexistent" not found. Available tables: users, products'
+      );
+    });
+
+    /**
+     * Test: getTable() handles empty tables object
+     */
+    it('should handle empty tables object gracefully', () => {
+      const client = new AppSheetClient(mockConnectionDef, 'test@example.com');
+
+      expect(() => client.getTable('anything')).toThrow(
+        'Table "anything" not found. Available tables: none'
+      );
     });
   });
 });

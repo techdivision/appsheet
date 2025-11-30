@@ -4,7 +4,6 @@
  * @category Types
  */
 
-import { AppSheetConfig } from './config';
 import {
   AddOptions,
   FindOptions,
@@ -17,6 +16,7 @@ import {
   UpdateResponse,
   DeleteResponse,
 } from './responses';
+import { TableDefinition } from './schema';
 
 /**
  * Interface for AppSheet client implementations.
@@ -131,9 +131,22 @@ export interface AppSheetClientInterface {
   deleteOne<T extends Record<string, any> = Record<string, any>>(tableName: string, row: T): Promise<boolean>;
 
   /**
-   * Get the current client configuration.
+   * Get a table definition by name.
    *
-   * @returns Readonly copy of the client configuration
+   * Returns the TableDefinition for the specified table from the client's
+   * ConnectionDefinition. Used by DynamicTableFactory to create DynamicTable instances.
+   *
+   * @param tableName - The schema name of the table (not the AppSheet table name)
+   * @returns The TableDefinition for the specified table
+   * @throws {Error} If the table doesn't exist in the connection
+   *
+   * @example
+   * ```typescript
+   * const client = new AppSheetClient(connectionDef, 'user@example.com');
+   * const tableDef = client.getTable('users');
+   * console.log(tableDef.tableName); // 'extract_user'
+   * console.log(tableDef.keyField);  // 'id'
+   * ```
    */
-  getConfig(): Readonly<Required<Omit<AppSheetConfig, 'runAsUserEmail'>> & { runAsUserEmail?: string }>;
+  getTable(tableName: string): TableDefinition;
 }

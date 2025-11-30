@@ -10,8 +10,9 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import {
-  AppSheetConfig,
   AppSheetClientInterface,
+  ConnectionDefinition,
+  TableDefinition,
   AddOptions,
   FindOptions,
   UpdateOptions,
@@ -33,78 +34,68 @@ import { createDefaultMockData } from './__mocks__/mockData';
  * Implements the same interface as AppSheetClient but uses an in-memory database.
  * Useful for unit and integration tests without hitting the real AppSheet API.
  *
+ * In v3.0.0, accepts a ConnectionDefinition (including table schemas) and runAsUserEmail.
+ *
  * @category Client
  *
  * @example
  * ```typescript
- * // Option 1: Use default mock data (example data for testing)
- * const client = new MockAppSheetClient({
+ * const connectionDef: ConnectionDefinition = {
  *   appId: 'mock-app',
- *   applicationAccessKey: 'mock-key'
- * });
+ *   applicationAccessKey: 'mock-key',
+ *   tables: {
+ *     users: {
+ *       tableName: 'extract_user',
+ *       keyField: 'id',
+ *       fields: { id: { type: 'Text', required: true } }
+ *     }
+ *   }
+ * };
+ *
+ * // Create mock client
+ * const client = new MockAppSheetClient(connectionDef, 'user@example.com');
  * client.seedDatabase(); // Load default example data
  *
- * // Option 2: Use project-specific mock data (recommended)
- * class MyProjectMockData implements MockDataProvider {
- *   getTables(): Map<string, TableData> {
- *     const tables = new Map();
- *     tables.set('users', {
- *       rows: [{ id: '1', name: 'John' }],
- *       keyField: 'id'
- *     });
- *     return tables;
- *   }
- * }
- *
- * const mockData = new MyProjectMockData();
- * const client = new MockAppSheetClient({
- *   appId: 'mock-app',
- *   applicationAccessKey: 'mock-key'
- * }, mockData); // Tables are automatically seeded
- *
  * // Use like real client
- * const users = await client.findAll('users');
- * const user = await client.addOne('users', { id: '2', name: 'Jane' });
+ * const users = await client.findAll('extract_user');
+ * const user = await client.addOne('extract_user', { id: '2', name: 'Jane' });
+ *
+ * // Get table definition
+ * const tableDef = client.getTable('users');
  * ```
  */
 export class MockAppSheetClient implements AppSheetClientInterface {
-  private readonly config: Required<Omit<AppSheetConfig, 'runAsUserEmail'>> & {
-    runAsUserEmail?: string;
-  };
+  private readonly connectionDef: ConnectionDefinition;
+  private readonly runAsUserEmail: string;
   private readonly database: MockDatabase;
 
   /**
    * Creates a new Mock AppSheet client instance.
    *
-   * @param config - Configuration for the mock client (only appId and applicationAccessKey are used)
+   * @param connectionDef - Full connection definition including app credentials and table schemas
+   * @param runAsUserEmail - Email of the user to execute all operations as (required)
    * @param dataProvider - Optional project-specific mock data provider. If provided, tables are automatically seeded.
    *
    * @example
    * ```typescript
-   * // Without data provider (manual seeding)
-   * const client = new MockAppSheetClient({
+   * const connectionDef: ConnectionDefinition = {
    *   appId: 'mock-app',
    *   applicationAccessKey: 'mock-key',
-   *   runAsUserEmail: 'test@example.com'
-   * });
+   *   tables: { ... }
+   * };
+   *
+   * // Without data provider (manual seeding)
+   * const client = new MockAppSheetClient(connectionDef, 'test@example.com');
    * client.seedDatabase(); // Load default example data
    *
    * // With data provider (automatic seeding)
    * const mockData = new MyProjectMockData();
-   * const client = new MockAppSheetClient({
-   *   appId: 'mock-app',
-   *   applicationAccessKey: 'mock-key'
-   * }, mockData); // Tables automatically seeded
+   * const client = new MockAppSheetClient(connectionDef, 'test@example.com', mockData);
    * ```
    */
-  constructor(config: AppSheetConfig, dataProvider?: MockDataProvider) {
-    this.config = {
-      baseUrl: 'https://api.appsheet.com/api/v2',
-      timeout: 30000,
-      retryAttempts: 3,
-      ...config,
-    };
-
+  constructor(connectionDef: ConnectionDefinition, runAsUserEmail: string, dataProvider?: MockDataProvider) {
+    this.connectionDef = connectionDef;
+    this.runAsUserEmail = runAsUserEmail;
     this.database = new MockDatabase();
 
     // Auto-seed from data provider if provided
@@ -174,7 +165,7 @@ export class MockAppSheetClient implements AppSheetClientInterface {
         [keyField]: (row as any)[keyField] || uuidv4(),
         created_at: new Date().toISOString(),
         created_by:
-          options.properties?.RunAsUserEmail || this.config.runAsUserEmail || 'mock@example.com',
+          options.properties?.RunAsUserEmail || this.runAsUserEmail,
       } as T;
 
       const created = this.database.insert(options.tableName, rowWithId, keyField);
@@ -224,7 +215,7 @@ export class MockAppSheetClient implements AppSheetClientInterface {
         ...row,
         modified_at: new Date().toISOString(),
         modified_by:
-          options.properties?.RunAsUserEmail || this.config.runAsUserEmail || 'mock@example.com',
+          options.properties?.RunAsUserEmail || this.runAsUserEmail,
       } as Partial<T>);
 
       if (!updated) {
@@ -316,12 +307,22 @@ export class MockAppSheetClient implements AppSheetClientInterface {
   }
 
   /**
-   * Get the current client configuration.
+   * Get a table definition by name.
+   *
+   * Returns the TableDefinition for the specified table from the client's
+   * ConnectionDefinition. Used by DynamicTableFactory to create DynamicTable instances.
+   *
+   * @param tableName - The schema name of the table (not the AppSheet table name)
+   * @returns The TableDefinition for the specified table
+   * @throws {Error} If the table doesn't exist in the connection
    */
-  getConfig(): Readonly<
-    Required<Omit<AppSheetConfig, 'runAsUserEmail'>> & { runAsUserEmail?: string }
-  > {
-    return { ...this.config };
+  getTable(tableName: string): TableDefinition {
+    const tableDef = this.connectionDef.tables[tableName];
+    if (!tableDef) {
+      const available = Object.keys(this.connectionDef.tables).join(', ') || 'none';
+      throw new Error(`Table "${tableName}" not found. Available tables: ${available}`);
+    }
+    return tableDef;
   }
 
   /**

@@ -4,8 +4,7 @@
  * @category Client
  */
 
-import { AppSheetClient } from './AppSheetClient';
-import { TableDefinition } from '../types';
+import { AppSheetClientInterface, TableDefinition } from '../types';
 import { AppSheetTypeValidator } from '../utils/validators';
 
 /**
@@ -14,6 +13,9 @@ import { AppSheetTypeValidator } from '../utils/validators';
  * Provides CRUD operations for a specific table with automatic validation
  * based on the table's schema definition. Validates field types, required
  * fields, and enum values at runtime.
+ *
+ * In v3.0.0, accepts AppSheetClientInterface instead of concrete AppSheetClient,
+ * enabling dependency injection and use with MockAppSheetClient for testing.
  *
  * @template T - The TypeScript type for rows in this table
  * @category Client
@@ -31,9 +33,9 @@ import { AppSheetTypeValidator } from '../utils/validators';
  * await table.delete([{ id: '1' }]);
  * ```
  */
-export class DynamicTable<T = Record<string, any>> {
+export class DynamicTable<T extends Record<string, any> = Record<string, any>> {
   constructor(
-    private client: AppSheetClient,
+    private client: AppSheetClientInterface,
     private definition: TableDefinition
   ) {}
 

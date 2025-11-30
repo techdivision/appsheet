@@ -1,27 +1,38 @@
 /**
- * Tests for DynamicTable with AppSheet field types
+ * Tests for DynamicTable with AppSheet field types (v3.0.0)
  */
 
 import { DynamicTable } from '../../src/client/DynamicTable';
-import { AppSheetClient } from '../../src/client/AppSheetClient';
-import { TableDefinition, ValidationError } from '../../src/types';
+import { AppSheetClientInterface, TableDefinition, ValidationError } from '../../src/types';
 
-// Mock AppSheetClient
-jest.mock('../../src/client/AppSheetClient');
+/**
+ * Create a mock client that implements AppSheetClientInterface
+ */
+function createMockClient(): jest.Mocked<AppSheetClientInterface> {
+  return {
+    add: jest.fn().mockResolvedValue({ rows: [], warnings: [] }),
+    find: jest.fn().mockResolvedValue({ rows: [], warnings: [] }),
+    update: jest.fn().mockResolvedValue({ rows: [], warnings: [] }),
+    delete: jest.fn().mockResolvedValue({ success: true, deletedCount: 0, warnings: [] }),
+    findAll: jest.fn().mockResolvedValue([]),
+    findOne: jest.fn().mockResolvedValue(null),
+    addOne: jest.fn().mockResolvedValue({}),
+    updateOne: jest.fn().mockResolvedValue({}),
+    deleteOne: jest.fn().mockResolvedValue(true),
+    getTable: jest.fn().mockReturnValue({
+      tableName: 'test',
+      keyField: 'id',
+      fields: { id: { type: 'Text', required: true } },
+    }),
+  };
+}
 
 describe('DynamicTable - AppSheet Field Types', () => {
-  let mockClient: jest.Mocked<AppSheetClient>;
+  let mockClient: jest.Mocked<AppSheetClientInterface>;
   let tableDef: TableDefinition;
 
   beforeEach(() => {
-    mockClient = new AppSheetClient({
-      appId: 'test',
-      applicationAccessKey: 'test',
-    }) as jest.Mocked<AppSheetClient>;
-
-    // Mock successful responses
-    mockClient.add.mockResolvedValue({ rows: [], warnings: [] });
-    mockClient.update.mockResolvedValue({ rows: [], warnings: [] });
+    mockClient = createMockClient();
   });
 
   describe('Email field validation', () => {

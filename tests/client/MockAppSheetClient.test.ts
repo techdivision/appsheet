@@ -1,5 +1,5 @@
 /**
- * Test Suite: MockAppSheetClient
+ * Test Suite: MockAppSheetClient v3.0.0
  *
  * Comprehensive test suite for the MockAppSheetClient class, which provides an in-memory
  * mock implementation of the AppSheetClientInterface for testing purposes.
@@ -8,7 +8,8 @@
  * - Database management (initialization, seeding, clearing)
  * - CRUD operations (Create, Read, Update, Delete)
  * - Convenience methods (simplified API wrappers)
- * - Configuration handling (including runAsUserEmail)
+ * - v3.0.0 constructor (ConnectionDefinition, runAsUserEmail)
+ * - v3.0.0 getTable() method
  * - Interface compliance with AppSheetClientInterface
  *
  * @module tests/client
@@ -18,7 +19,7 @@
 jest.mock('uuid');
 
 import { MockAppSheetClient } from '../../src/client/MockAppSheetClient';
-import { ValidationError, NotFoundError } from '../../src/types';
+import { ValidationError, NotFoundError, ConnectionDefinition } from '../../src/types';
 
 /**
  * Test data interface representing a User entity.
@@ -44,6 +45,36 @@ interface Product {
 }
 
 /**
+ * Sample ConnectionDefinition for v3.0.0 testing.
+ */
+const mockConnectionDef: ConnectionDefinition = {
+  appId: 'mock-app',
+  applicationAccessKey: 'mock-key',
+  tables: {
+    users: {
+      tableName: 'users',
+      keyField: 'id',
+      fields: {
+        id: { type: 'Text', required: true },
+        name: { type: 'Name', required: true },
+        email: { type: 'Email', required: false },
+        status: { type: 'Enum', required: false, allowedValues: ['active', 'inactive'] },
+      },
+    },
+    products: {
+      tableName: 'products',
+      keyField: 'id',
+      fields: {
+        id: { type: 'Text', required: true },
+        name: { type: 'Text', required: true },
+      },
+    },
+  },
+};
+
+const mockRunAsUserEmail = 'mock@example.com';
+
+/**
  * Test Suite: MockAppSheetClient Core Functionality
  *
  * Tests the complete lifecycle of the MockAppSheetClient including initialization,
@@ -57,10 +88,7 @@ describe('MockAppSheetClient', () => {
    * Ensures test isolation by providing a clean database state.
    */
   beforeEach(() => {
-    client = new MockAppSheetClient({
-      appId: 'mock-app',
-      applicationAccessKey: 'mock-key',
-    });
+    client = new MockAppSheetClient(mockConnectionDef, mockRunAsUserEmail);
   });
 
   /**
@@ -245,24 +273,20 @@ describe('MockAppSheetClient', () => {
     });
 
     /**
-     * Test: Use Global runAsUserEmail from Configuration
+     * Test: Use Global runAsUserEmail from Constructor
      *
-     * Verifies that when runAsUserEmail is configured globally on the client,
+     * Verifies that when runAsUserEmail is provided in constructor,
      * it is automatically applied to the created_by field for all add operations.
      *
      * Expected behavior:
-     * - created_by field is set to the configured runAsUserEmail
+     * - created_by field is set to the constructor runAsUserEmail
      * - Global setting applies to all operations unless overridden
      *
      * Use case: Testing audit trails and permission contexts where all
      * operations should be attributed to a specific user
      */
-    it('should use runAsUserEmail from config', async () => {
-      const clientWithUser = new MockAppSheetClient({
-        appId: 'mock-app',
-        applicationAccessKey: 'mock-key',
-        runAsUserEmail: 'admin@example.com',
-      });
+    it('should use runAsUserEmail from constructor', async () => {
+      const clientWithUser = new MockAppSheetClient(mockConnectionDef, 'admin@example.com');
 
       const result = await clientWithUser.add<User>({
         tableName: 'users',
@@ -862,55 +886,88 @@ describe('MockAppSheetClient', () => {
   });
 
   /**
-   * Test Suite: Configuration Management
+   * Test Suite: getTable() Method (v3.0.0)
    *
-   * Verifies that the client properly stores and retrieves configuration
-   * values including default values and optional parameters.
+   * Verifies the getTable() method which retrieves TableDefinitions
+   * from the ConnectionDefinition for use with DynamicTableFactory.
    */
-  describe('Configuration', () => {
+  describe('getTable() method', () => {
     /**
-     * Test: Retrieve Default Configuration
+     * Test: Get TableDefinition for existing table
      *
-     * Verifies that getConfig() returns all configuration values including
-     * defaults that were applied during client initialization.
-     *
-     * Expected behavior:
-     * - Provided values are returned (appId, applicationAccessKey)
-     * - Default values are returned (baseUrl, timeout, retryAttempts)
-     * - Configuration is read-only (via Readonly type)
-     *
-     * Use case: Debugging client configuration in tests
+     * Verifies that getTable() returns the correct TableDefinition
+     * from the ConnectionDefinition.
      */
-    it('should return configuration', () => {
-      const config = client.getConfig();
-      expect(config.appId).toBe('mock-app');
-      expect(config.applicationAccessKey).toBe('mock-key');
-      expect(config.baseUrl).toBe('https://api.appsheet.com/api/v2');
-      expect(config.timeout).toBe(30000);
-      expect(config.retryAttempts).toBe(3);
+    it('should return TableDefinition for existing table', () => {
+      const tableDef = client.getTable('users');
+      expect(tableDef).toEqual({
+        tableName: 'users',
+        keyField: 'id',
+        fields: {
+          id: { type: 'Text', required: true },
+          name: { type: 'Name', required: true },
+          email: { type: 'Email', required: false },
+          status: { type: 'Enum', required: false, allowedValues: ['active', 'inactive'] },
+        },
+      });
     });
 
     /**
-     * Test: Configuration Includes Optional runAsUserEmail
+     * Test: Get different TableDefinitions
      *
-     * Verifies that when runAsUserEmail is provided during client initialization,
-     * it is included in the returned configuration.
-     *
-     * Expected behavior:
-     * - runAsUserEmail is present in config when provided
-     * - Value matches what was provided during initialization
-     *
-     * Use case: Verifying user context configuration
+     * Verifies that getTable() returns correct TableDefinition for different tables.
      */
-    it('should include runAsUserEmail in config if provided', () => {
-      const clientWithUser = new MockAppSheetClient({
-        appId: 'mock-app',
-        applicationAccessKey: 'mock-key',
-        runAsUserEmail: 'admin@example.com',
-      });
+    it('should return correct TableDefinition for different tables', () => {
+      const usersDef = client.getTable('users');
+      const productsDef = client.getTable('products');
 
-      const config = clientWithUser.getConfig();
-      expect(config.runAsUserEmail).toBe('admin@example.com');
+      expect(usersDef.tableName).toBe('users');
+      expect(usersDef.keyField).toBe('id');
+
+      expect(productsDef.tableName).toBe('products');
+      expect(productsDef.keyField).toBe('id');
+    });
+
+    /**
+     * Test: Throw Error for non-existent table
+     *
+     * Verifies that getTable() throws an error when the requested
+     * table doesn't exist in the ConnectionDefinition.
+     */
+    it('should throw Error for non-existent table', () => {
+      expect(() => client.getTable('nonexistent')).toThrow(
+        'Table "nonexistent" not found. Available tables: users, products'
+      );
+    });
+
+    /**
+     * Test: Error message lists available tables
+     *
+     * Verifies that the error message includes a list of available tables.
+     */
+    it('should list available tables in error message', () => {
+      expect(() => client.getTable('invalid')).toThrow(/Available tables:/);
+      expect(() => client.getTable('invalid')).toThrow(/users/);
+      expect(() => client.getTable('invalid')).toThrow(/products/);
+    });
+
+    /**
+     * Test: Handle empty tables object
+     *
+     * Verifies that getTable() handles ConnectionDefinition with empty tables.
+     */
+    it('should handle empty tables object gracefully', () => {
+      const emptyConnDef: ConnectionDefinition = {
+        appId: 'test-app',
+        applicationAccessKey: 'test-key',
+        tables: {},
+      };
+
+      const emptyClient = new MockAppSheetClient(emptyConnDef, 'test@example.com');
+
+      expect(() => emptyClient.getTable('anything')).toThrow(
+        'Table "anything" not found. Available tables: none'
+      );
     });
   });
 
@@ -944,7 +1001,7 @@ describe('MockAppSheetClient', () => {
       // Type check: This ensures MockAppSheetClient implements AppSheetClientInterface
       const clientInterface: import('../../src/types').AppSheetClientInterface = client;
 
-      // Check all required methods exist
+      // Check all required methods exist (v3.0.0)
       expect(typeof clientInterface.add).toBe('function');
       expect(typeof clientInterface.find).toBe('function');
       expect(typeof clientInterface.update).toBe('function');
@@ -954,7 +1011,7 @@ describe('MockAppSheetClient', () => {
       expect(typeof clientInterface.addOne).toBe('function');
       expect(typeof clientInterface.updateOne).toBe('function');
       expect(typeof clientInterface.deleteOne).toBe('function');
-      expect(typeof clientInterface.getConfig).toBe('function');
+      expect(typeof clientInterface.getTable).toBe('function'); // v3.0.0
     });
   });
 });
