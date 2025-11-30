@@ -32,6 +32,16 @@ describe('SchemaManager v3.0.0', () => {
               id: { type: 'Text', required: true },
               email: { type: 'Email', required: true },
               name: { type: 'Text', required: false },
+              status: {
+                type: 'Enum',
+                required: true,
+                allowedValues: ['Active', 'Inactive', 'Pending'],
+              },
+              tags: {
+                type: 'EnumList',
+                required: false,
+                allowedValues: ['Admin', 'User', 'Guest'],
+              },
             },
           },
           worklogs: {
@@ -256,12 +266,14 @@ describe('SchemaManager v3.0.0', () => {
         id: string;
         email: string;
         name?: string;
+        status: string;
+        tags?: string[];
       }
 
       const table = manager.table<User>('test-conn', 'users', 'test@example.com');
 
       // Add
-      const added = await table.add([{ id: '1', email: 'alice@example.com', name: 'Alice' }]);
+      const added = await table.add([{ id: '1', email: 'alice@example.com', name: 'Alice', status: 'Active' }]);
       expect(added).toHaveLength(1);
 
       // Find
@@ -277,10 +289,10 @@ describe('SchemaManager v3.0.0', () => {
       const table = manager.table('test-conn', 'users', 'test@example.com');
 
       // Add initial data
-      await table.add([{ id: '1', email: 'alice@example.com' }]);
+      await table.add([{ id: '1', email: 'alice@example.com', status: 'Active' }]);
 
       // Update
-      const updated = await table.update([{ id: '1', email: 'alice.new@example.com' }]);
+      const updated = await table.update([{ id: '1', email: 'alice.new@example.com', status: 'Active' }]);
       expect(updated[0].email).toBe('alice.new@example.com');
 
       // Delete
@@ -339,8 +351,8 @@ describe('SchemaManager v3.0.0', () => {
       const user2Table = manager.table('test-conn', 'users', 'user2@example.com');
 
       // Each user operates on their own table instance
-      await user1Table.add([{ id: '1', email: 'user1@example.com' }]);
-      await user2Table.add([{ id: '2', email: 'user2@example.com' }]);
+      await user1Table.add([{ id: '1', email: 'user1@example.com', status: 'Active' }]);
+      await user2Table.add([{ id: '2', email: 'user2@example.com', status: 'Active' }]);
 
       // Tables are different instances
       expect(user1Table).not.toBe(user2Table);
@@ -356,7 +368,7 @@ describe('SchemaManager v3.0.0', () => {
       const worklogsTable = manager.table('test-conn', 'worklogs', userEmail);
 
       // User can access different tables
-      await usersTable.add([{ id: '1', email: userEmail }]);
+      await usersTable.add([{ id: '1', email: userEmail, status: 'Active' }]);
       await worklogsTable.add([{ id: 'W1', date: '2025-01-01', hours: 8 }]);
 
       const users = await usersTable.findAll();
@@ -364,6 +376,171 @@ describe('SchemaManager v3.0.0', () => {
 
       expect(users).toHaveLength(1);
       expect(worklogs).toHaveLength(1);
+    });
+  });
+
+  describe('getTableDefinition()', () => {
+    it('should return table definition for existing table', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const tableDef = manager.getTableDefinition('test-conn', 'users');
+
+      expect(tableDef).toBeDefined();
+      expect(tableDef?.tableName).toBe('extract_user');
+      expect(tableDef?.keyField).toBe('id');
+      expect(tableDef?.fields).toHaveProperty('id');
+      expect(tableDef?.fields).toHaveProperty('email');
+      expect(tableDef?.fields).toHaveProperty('status');
+    });
+
+    it('should return undefined for non-existent connection', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const tableDef = manager.getTableDefinition('nonexistent', 'users');
+
+      expect(tableDef).toBeUndefined();
+    });
+
+    it('should return undefined for non-existent table', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const tableDef = manager.getTableDefinition('test-conn', 'nonexistent');
+
+      expect(tableDef).toBeUndefined();
+    });
+
+    it('should return table definition from different connections', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const usersDef = manager.getTableDefinition('test-conn', 'users');
+      const employeesDef = manager.getTableDefinition('hr-conn', 'employees');
+
+      expect(usersDef?.tableName).toBe('extract_user');
+      expect(employeesDef?.tableName).toBe('extract_employee');
+    });
+  });
+
+  describe('getFieldDefinition()', () => {
+    it('should return field definition for existing field', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const fieldDef = manager.getFieldDefinition('test-conn', 'users', 'email');
+
+      expect(fieldDef).toBeDefined();
+      expect(fieldDef?.type).toBe('Email');
+      expect(fieldDef?.required).toBe(true);
+    });
+
+    it('should return field definition with allowedValues for Enum field', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const fieldDef = manager.getFieldDefinition('test-conn', 'users', 'status');
+
+      expect(fieldDef).toBeDefined();
+      expect(fieldDef?.type).toBe('Enum');
+      expect(fieldDef?.required).toBe(true);
+      expect(fieldDef?.allowedValues).toEqual(['Active', 'Inactive', 'Pending']);
+    });
+
+    it('should return field definition for EnumList field', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const fieldDef = manager.getFieldDefinition('test-conn', 'users', 'tags');
+
+      expect(fieldDef).toBeDefined();
+      expect(fieldDef?.type).toBe('EnumList');
+      expect(fieldDef?.required).toBe(false);
+      expect(fieldDef?.allowedValues).toEqual(['Admin', 'User', 'Guest']);
+    });
+
+    it('should return undefined for non-existent connection', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const fieldDef = manager.getFieldDefinition('nonexistent', 'users', 'email');
+
+      expect(fieldDef).toBeUndefined();
+    });
+
+    it('should return undefined for non-existent table', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const fieldDef = manager.getFieldDefinition('test-conn', 'nonexistent', 'email');
+
+      expect(fieldDef).toBeUndefined();
+    });
+
+    it('should return undefined for non-existent field', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const fieldDef = manager.getFieldDefinition('test-conn', 'users', 'nonexistent');
+
+      expect(fieldDef).toBeUndefined();
+    });
+  });
+
+  describe('getAllowedValues()', () => {
+    it('should return allowed values for Enum field', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const values = manager.getAllowedValues('test-conn', 'users', 'status');
+
+      expect(values).toEqual(['Active', 'Inactive', 'Pending']);
+    });
+
+    it('should return allowed values for EnumList field', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const values = manager.getAllowedValues('test-conn', 'users', 'tags');
+
+      expect(values).toEqual(['Admin', 'User', 'Guest']);
+    });
+
+    it('should return undefined for field without allowedValues', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const values = manager.getAllowedValues('test-conn', 'users', 'email');
+
+      expect(values).toBeUndefined();
+    });
+
+    it('should return undefined for non-existent field', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const values = manager.getAllowedValues('test-conn', 'users', 'nonexistent');
+
+      expect(values).toBeUndefined();
+    });
+
+    it('should return undefined for non-existent table', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const values = manager.getAllowedValues('test-conn', 'nonexistent', 'status');
+
+      expect(values).toBeUndefined();
+    });
+
+    it('should return undefined for non-existent connection', () => {
+      const factory = new MockAppSheetClientFactory();
+      const manager = new SchemaManager(factory, baseSchema);
+
+      const values = manager.getAllowedValues('nonexistent', 'users', 'status');
+
+      expect(values).toBeUndefined();
     });
   });
 });

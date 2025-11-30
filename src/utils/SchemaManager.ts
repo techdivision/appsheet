@@ -217,4 +217,112 @@ export class SchemaManager {
   getSchema(): SchemaConfig {
     return this.schema;
   }
+
+  /**
+   * Get a table definition from the schema.
+   *
+   * Returns the complete table definition including tableName, keyField, and all field definitions.
+   * Returns `undefined` if the connection or table doesn't exist.
+   *
+   * @param connectionName - The name of the connection containing the table
+   * @param tableName - The name of the table as defined in the schema
+   * @returns The TableDefinition or `undefined` if not found
+   *
+   * @example
+   * ```typescript
+   * const tableDef = db.getTableDefinition('worklog', 'worklogs');
+   * if (tableDef) {
+   *   console.log('Table name:', tableDef.tableName);
+   *   console.log('Key field:', tableDef.keyField);
+   *   console.log('Fields:', Object.keys(tableDef.fields));
+   * }
+   * ```
+   */
+  getTableDefinition(
+    connectionName: string,
+    tableName: string
+  ): import('../types').TableDefinition | undefined {
+    const connDef = this.schema.connections[connectionName];
+    if (!connDef) {
+      return undefined;
+    }
+    return connDef.tables[tableName];
+  }
+
+  /**
+   * Get a field definition from the schema.
+   *
+   * Returns the complete field definition including type, required status, allowedValues, etc.
+   * Returns `undefined` if the connection, table, or field doesn't exist.
+   *
+   * @param connectionName - The name of the connection containing the table
+   * @param tableName - The name of the table as defined in the schema
+   * @param fieldName - The name of the field
+   * @returns The FieldDefinition or `undefined` if not found
+   *
+   * @example
+   * ```typescript
+   * const statusField = db.getFieldDefinition('worklog', 'worklogs', 'status');
+   * if (statusField) {
+   *   console.log('Type:', statusField.type);
+   *   console.log('Required:', statusField.required);
+   *   if (statusField.allowedValues) {
+   *     console.log('Allowed values:', statusField.allowedValues);
+   *   }
+   * }
+   * ```
+   */
+  getFieldDefinition(
+    connectionName: string,
+    tableName: string,
+    fieldName: string
+  ): import('../types').FieldDefinition | undefined {
+    const tableDef = this.getTableDefinition(connectionName, tableName);
+    if (!tableDef) {
+      return undefined;
+    }
+    return tableDef.fields[fieldName];
+  }
+
+  /**
+   * Get allowed values for an Enum or EnumList field.
+   *
+   * Convenience method to quickly retrieve the allowed values for enum fields.
+   * Returns `undefined` if the field doesn't exist or has no allowedValues defined.
+   *
+   * @param connectionName - The name of the connection containing the table
+   * @param tableName - The name of the table as defined in the schema
+   * @param fieldName - The name of the Enum/EnumList field
+   * @returns Array of allowed values or `undefined` if not found/not an enum field
+   *
+   * @example
+   * ```typescript
+   * const statusValues = db.getAllowedValues('worklog', 'worklogs', 'status');
+   * if (statusValues) {
+   *   console.log('Valid status values:', statusValues);
+   *   // Output: ['Pending', 'In Progress', 'Completed']
+   * }
+   *
+   * // Use case: Generate Zod enum schema
+   * const values = db.getAllowedValues('default', 'service_portfolio', 'status');
+   * const statusEnum = z.enum(values as [string, ...string[]]);
+   *
+   * // Use case: Populate UI dropdown
+   * const options = db.getAllowedValues('default', 'users', 'role')?.map(v => ({
+   *   label: v,
+   *   value: v
+   * }));
+   * ```
+   */
+  getAllowedValues(
+    connectionName: string,
+    tableName: string,
+    fieldName: string
+  ): string[] | undefined {
+    const fieldDef = this.getFieldDefinition(connectionName, tableName, fieldName);
+    if (!fieldDef) {
+      return undefined;
+    }
+    return fieldDef.allowedValues;
+  }
 }

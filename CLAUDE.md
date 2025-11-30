@@ -121,6 +121,9 @@ npx appsheet inspect --help  # After npm install (uses bin entry)
 - **`table<T>(connection, tableName, runAsUserEmail)`**: Creates DynamicTable instances on-the-fly
   - `runAsUserEmail` is required in v3.0.0 (not optional)
   - Each call creates a new client instance (lightweight operation)
+- **`getTableDefinition(connection, tableName)`**: Returns TableDefinition or undefined
+- **`getFieldDefinition(connection, tableName, fieldName)`**: Returns FieldDefinition or undefined
+- **`getAllowedValues(connection, tableName, fieldName)`**: Returns allowed values for Enum/EnumList fields
 - Entry point for schema-based usage pattern
 
 **ConnectionManager** (`src/utils/ConnectionManager.ts`)
@@ -262,6 +265,36 @@ server.tool('list_worklogs', async (params, context) => {
   // All operations execute with user's AppSheet permissions
   return await table.findAll();
 });
+```
+
+### Schema Introspection (v3.0.0)
+
+Access schema metadata directly without navigating nested structures:
+
+```typescript
+// Get table definition
+const tableDef = db.getTableDefinition('default', 'service_portfolio');
+// → { tableName: 'service_portfolio', keyField: 'id', fields: {...} }
+
+// Get field definition
+const statusField = db.getFieldDefinition('default', 'service_portfolio', 'status');
+// → { type: 'Enum', allowedValues: ['Active', 'Inactive'], required: true }
+
+// Get allowed values for Enum field (shortcut)
+const statusValues = db.getAllowedValues('default', 'service_portfolio', 'status');
+// → ['Active', 'Inactive', 'Pending']
+
+// Use case: Generate Zod enum schema
+const values = db.getAllowedValues('default', 'users', 'role');
+if (values) {
+  const roleEnum = z.enum(values as [string, ...string[]]);
+}
+
+// Use case: Populate UI dropdown
+const options = db.getAllowedValues('default', 'users', 'status')?.map(v => ({
+  label: v,
+  value: v
+}));
 ```
 
 ### Validation Examples
