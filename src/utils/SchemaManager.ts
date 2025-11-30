@@ -1,44 +1,70 @@
 /**
- * Schema Manager for managing connections and tables from schema
+ * Schema Manager v3.0.0 - Factory-Based Table Creation
+ *
+ * The SchemaManager uses injected factories to create table clients on-demand.
+ * This enables dependency injection and easy testing by swapping real factories
+ * with mock implementations.
+ *
  * @module utils
  * @category Schema Management
  */
 
-import { SchemaConfig, ValidationError } from '../types';
-import { ConnectionManager } from './ConnectionManager';
+import {
+  SchemaConfig,
+  ValidationError,
+  AppSheetClientFactoryInterface,
+  DynamicTableFactoryInterface,
+} from '../types';
 import { SchemaLoader } from './SchemaLoader';
-import { DynamicTable } from '../client/DynamicTable';
+import { DynamicTable, DynamicTableFactory } from '../client';
 
 /**
- * Manages connections and tables based on schema configuration.
+ * Manages schema-based table access using factory injection.
  *
- * Central management class that initializes connections and provides
- * type-safe table clients based on a loaded schema configuration.
+ * In v3.0.0, SchemaManager is simplified to focus on schema validation and
+ * providing a clean API for accessing tables. Table clients are created
+ * on-demand using the injected DynamicTableFactory.
  *
  * @category Schema Management
  *
  * @example
  * ```typescript
- * // Load schema
- * const schema = SchemaLoader.fromYaml('./config/appsheet-schema.yaml');
+ * // Production setup
+ * const clientFactory = new AppSheetClientFactory();
+ * const schema = SchemaLoader.fromYaml('./config/schema.yaml');
+ * const db = new SchemaManager(clientFactory, schema);
  *
- * // Create manager
- * const db = new SchemaManager(schema);
+ * // Get table client for specific user
+ * const worklogsTable = db.table<Worklog>('worklog', 'worklogs', 'user@example.com');
+ * const entries = await worklogsTable.findAll();
  *
- * // Get table clients
- * const worklogsTable = db.table<Worklog>('worklog', 'worklogs');
- * const usersTable = db.table<User>('hr', 'users');
- *
- * // Use table clients
- * const worklogs = await worklogsTable.findAll();
- * await worklogsTable.add([{ ... }]);
+ * // Testing setup with mock factory
+ * const mockFactory = new MockAppSheetClientFactory(testData);
+ * const testDb = new SchemaManager(mockFactory, schema);
+ * const testTable = testDb.table('worklog', 'worklogs', 'test@example.com');
  * ```
  */
 export class SchemaManager {
-  private schema: SchemaConfig;
-  private connectionManager: ConnectionManager;
+  private readonly tableFactory: DynamicTableFactoryInterface;
 
-  constructor(schema: SchemaConfig) {
+  /**
+   * Creates a new SchemaManager.
+   *
+   * @param clientFactory - Factory to create AppSheetClient instances
+   * @param schema - Schema configuration containing connection and table definitions
+   * @throws {ValidationError} If the schema is invalid
+   *
+   * @example
+   * ```typescript
+   * const factory = new AppSheetClientFactory();
+   * const schema = SchemaLoader.fromYaml('./schema.yaml');
+   * const db = new SchemaManager(factory, schema);
+   * ```
+   */
+  constructor(
+    clientFactory: AppSheetClientFactoryInterface,
+    private readonly schema: SchemaConfig
+  ) {
     // Validate schema
     const validation = SchemaLoader.validate(schema);
     if (!validation.valid) {
@@ -48,47 +74,23 @@ export class SchemaManager {
       );
     }
 
-    this.schema = schema;
-    this.connectionManager = new ConnectionManager();
-    this.initialize();
+    // Create table factory using injected client factory
+    this.tableFactory = new DynamicTableFactory(clientFactory, schema);
   }
 
   /**
-   * Initialize all connections from schema.
+   * Get a type-safe table client for a specific user.
    *
-   * Registers all connections defined in the schema with the ConnectionManager.
-   * Table clients are created on-the-fly when requested via table() method.
-   */
-  private initialize(): void {
-    for (const [connName, connDef] of Object.entries(this.schema.connections)) {
-      // Register connection
-      this.connectionManager.register({
-        name: connName,
-        appId: connDef.appId,
-        applicationAccessKey: connDef.applicationAccessKey,
-        baseUrl: connDef.baseUrl,
-        timeout: connDef.timeout,
-        runAsUserEmail: connDef.runAsUserEmail,
-      });
-    }
-  }
-
-  /**
-   * Get a type-safe table client, optionally for a specific user.
-   *
-   * Returns a DynamicTable instance for the specified table in the given connection.
+   * Creates a DynamicTable instance for the specified table in the given connection.
    * The table client provides CRUD operations with runtime validation based on the schema.
    *
-   * When runAsUserEmail is provided, creates a user-specific client that will execute
-   * all operations as that user. The client is created on-the-fly and not cached (lightweight operation).
-   *
-   * When runAsUserEmail is not provided, uses the default client from the connection
-   * (which may have a default runAsUserEmail configured in the schema).
+   * Each call creates a new client instance (lightweight operation).
+   * The runAsUserEmail parameter is required in v3.0.0 to ensure explicit user context.
    *
    * @template T - Type interface for the table rows
    * @param connectionName - The name of the connection containing the table
    * @param tableName - The name of the table as defined in the schema
-   * @param runAsUserEmail - Optional: Email of the user to execute operations as
+   * @param runAsUserEmail - Email of the user to execute all operations as (required)
    * @returns A DynamicTable instance for performing operations on the table
    * @throws {Error} If the connection or table doesn't exist
    *
@@ -101,41 +103,18 @@ export class SchemaManager {
    *   description: string;
    * }
    *
-   * // Default behavior (existing code, backward compatible)
-   * const worklogsTable = db.table<Worklog>('worklog', 'worklogs');
-   * const entries = await worklogsTable.findAll();
-   * await worklogsTable.add([{ id: '1', date: '2025-10-29', hours: 8, description: 'Work' }]);
-   *
-   * // User-specific behavior (new)
-   * const userWorklogsTable = db.table<Worklog>('worklog', 'worklogs', 'user@example.com');
-   * const userEntries = await userWorklogsTable.findAll();
+   * // Get table client for specific user
+   * const table = db.table<Worklog>('worklog', 'worklogs', 'user@example.com');
+   * const entries = await table.findAll();
+   * await table.add([{ id: '1', date: '2025-10-29', hours: 8, description: 'Work' }]);
    * ```
    */
-  table<T = Record<string, any>>(connectionName: string, tableName: string, runAsUserEmail?: string): DynamicTable<T> {
-    // Check if connection exists in schema
-    const connDef = this.schema.connections[connectionName];
-    if (!connDef) {
-      const available = Object.keys(this.schema.connections).join(', ') || 'none';
-      throw new Error(
-        `Connection "${connectionName}" not found. Available connections: ${available}`
-      );
-    }
-
-    // Check if table exists in connection
-    const tableDef = connDef.tables[tableName];
-    if (!tableDef) {
-      const available = Object.keys(connDef.tables).join(', ');
-      throw new Error(
-        `Table "${tableName}" not found in connection "${connectionName}". ` +
-          `Available tables: ${available}`
-      );
-    }
-
-    // Get client (with optional user context)
-    const client = this.connectionManager.get(connectionName, runAsUserEmail);
-
-    // Create and return table client on-the-fly
-    return new DynamicTable<T>(client, tableDef);
+  table<T extends Record<string, any> = Record<string, any>>(
+    connectionName: string,
+    tableName: string,
+    runAsUserEmail: string
+  ): DynamicTable<T> {
+    return this.tableFactory.create<T>(connectionName, tableName, runAsUserEmail);
   }
 
   /**
@@ -186,47 +165,39 @@ export class SchemaManager {
   }
 
   /**
-   * Get the underlying connection manager.
+   * Check if a connection exists in the schema.
    *
-   * Provides access to the internal ConnectionManager instance for advanced use cases,
-   * such as direct client access or connection management.
-   *
-   * @returns The ConnectionManager instance
+   * @param connectionName - The connection name to check
+   * @returns `true` if the connection exists, `false` otherwise
    *
    * @example
    * ```typescript
-   * const connManager = db.getConnectionManager();
-   * const health = await connManager.healthCheck();
-   * console.log('Connection health:', health);
+   * if (db.hasConnection('worklog')) {
+   *   const table = db.table('worklog', 'worklogs', 'user@example.com');
+   * }
    * ```
    */
-  getConnectionManager(): ConnectionManager {
-    return this.connectionManager;
+  hasConnection(connectionName: string): boolean {
+    return connectionName in this.schema.connections;
   }
 
   /**
-   * Reload schema configuration.
+   * Check if a table exists in a connection.
    *
-   * Clears all existing connections, then reinitializes them with the new schema.
-   * Useful for hot-reloading configuration changes. Table clients are created
-   * on-the-fly when requested via table() method.
-   *
-   * @param schema - The new schema configuration to load
+   * @param connectionName - The connection name
+   * @param tableName - The table name to check
+   * @returns `true` if the table exists in the connection, `false` otherwise
    *
    * @example
    * ```typescript
-   * // Load updated schema
-   * const newSchema = SchemaLoader.fromYaml('./config/appsheet-schema.yaml');
-   * db.reload(newSchema);
-   *
-   * // All table clients now use the new configuration
-   * const table = db.table('worklog', 'worklogs');
+   * if (db.hasTable('worklog', 'worklogs')) {
+   *   const table = db.table('worklog', 'worklogs', 'user@example.com');
+   * }
    * ```
    */
-  reload(schema: SchemaConfig): void {
-    this.connectionManager.clear();
-    this.schema = schema;
-    this.initialize();
+  hasTable(connectionName: string, tableName: string): boolean {
+    const connDef = this.schema.connections[connectionName];
+    return connDef ? tableName in connDef.tables : false;
   }
 
   /**

@@ -7,7 +7,8 @@
 /**
  * AppSheet client configuration.
  *
- * Configuration options for creating an AppSheet API client.
+ * @deprecated Since v3.0.0 - Use {@link ConnectionDefinition} instead.
+ * The AppSheetClient constructor now takes (ConnectionDefinition, runAsUserEmail).
  *
  * @category Types
  */
@@ -33,6 +34,11 @@ export interface AppSheetConfig {
 
 /**
  * Connection configuration for ConnectionManager
+ *
+ * @deprecated Since v3.0.0 - ConnectionManager now uses factory injection.
+ * Use ConnectionManager(clientFactory, schema) constructor instead.
+ *
+ * @category Types
  */
 export interface ConnectionConfig extends AppSheetConfig {
   /** Unique name for this connection */

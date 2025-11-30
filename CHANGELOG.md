@@ -7,6 +7,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2024-11-30
+
+### Added
+
+- **Factory Pattern for Dependency Injection** (SOSO-249)
+  - `AppSheetClientFactory`: Creates real AppSheetClient instances
+  - `MockAppSheetClientFactory`: Creates MockAppSheetClient instances for testing
+  - `DynamicTableFactory`: Creates DynamicTable instances from schema
+  - `AppSheetClientFactoryInterface`: Interface for custom factory implementations
+  - `DynamicTableFactoryInterface`: Interface for custom table factory implementations
+
+- **Enhanced Client Interface**
+  - Added `getTable(tableName)` method to `AppSheetClientInterface`
+  - Returns TableDefinition for tables in the connection
+  - Enables DynamicTableFactory to create tables with proper definitions
+
+- **SchemaManager Introspection Methods**
+  - `hasConnection(connectionName)`: Check if connection exists
+  - `hasTable(connectionName, tableName)`: Check if table exists in connection
+
+- **ConnectionManager Introspection Methods**
+  - `list()`: Returns array of all connection names
+  - `has(connectionName)`: Checks if connection exists
+
+### Changed
+
+- **BREAKING**: `AppSheetClient` constructor signature changed
+  - Old: `new AppSheetClient({ appId, applicationAccessKey, runAsUserEmail? })`
+  - New: `new AppSheetClient(connectionDef, runAsUserEmail)`
+  - `connectionDef` is a full `ConnectionDefinition` with tables
+  - `runAsUserEmail` is required (not optional)
+
+- **BREAKING**: `MockAppSheetClient` constructor signature changed
+  - Old: `new MockAppSheetClient({ appId, applicationAccessKey })`
+  - New: `new MockAppSheetClient(connectionDef, runAsUserEmail, dataProvider?)`
+
+- **BREAKING**: `ConnectionManager` now uses factory injection
+  - Old: `new ConnectionManager()` + `register()` + `get(name, userEmail?)`
+  - New: `new ConnectionManager(clientFactory, schema)` + `get(name, userEmail)`
+  - Both `connectionName` and `runAsUserEmail` are required in `get()`
+
+- **BREAKING**: `SchemaManager` now uses factory injection
+  - Old: `new SchemaManager(schema)` + `table(conn, table, userEmail?)`
+  - New: `new SchemaManager(clientFactory, schema)` + `table(conn, table, userEmail)`
+  - `runAsUserEmail` is required in `table()` (not optional)
+
+- **BREAKING**: `DynamicTable` constructor uses interface
+  - Now accepts `AppSheetClientInterface` instead of concrete `AppSheetClient`
+  - Enables proper dependency injection and testing
+
+### Removed
+
+- **BREAKING**: `AppSheetClient.getConfig()` - use `getTable()` instead
+- **BREAKING**: `ConnectionManager.register()` - constructor accepts schema directly
+- **BREAKING**: `ConnectionManager.remove()` - connections defined by schema
+- **BREAKING**: `ConnectionManager.clear()` - connections defined by schema
+- **BREAKING**: `ConnectionManager.ping()` - removed health check
+- **BREAKING**: `ConnectionManager.healthCheck()` - removed health check
+- **BREAKING**: `SchemaManager.getConnectionManager()` - internal only
+- **BREAKING**: `SchemaManager.reload()` - create new instance instead
+
+### Deprecated
+
+- `AppSheetConfig` interface - use `ConnectionDefinition` instead
+- `ConnectionConfig` interface - use factory injection pattern instead
+
+### Migration Guide
+
+See [CLAUDE.md](./CLAUDE.md) Breaking Changes section for detailed migration examples.
+
+**Quick Migration:**
+```typescript
+// Old (v2.x)
+const client = new AppSheetClient({ appId, applicationAccessKey, runAsUserEmail });
+const db = new SchemaManager(schema);
+const table = db.table('conn', 'table');  // optional user
+
+// New (v3.0.0)
+const connectionDef = { appId, applicationAccessKey, tables: {...} };
+const client = new AppSheetClient(connectionDef, runAsUserEmail);
+
+const factory = new AppSheetClientFactory();
+const db = new SchemaManager(factory, schema);
+const table = db.table('conn', 'table', runAsUserEmail);  // required user
+```
+
+### Technical Details
+
+- **SemVer Level**: MAJOR (breaking changes)
+- **Test Coverage**: 205 tests across 8 test suites
+- **Breaking Changes**: Constructor signatures, required parameters, removed methods
+
 ## [2.1.0] - 2024-11-24
 
 ### Added
