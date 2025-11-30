@@ -82,11 +82,10 @@ npx appsheet inspect --help  # After npm install (uses bin entry)
 - Main API client with CRUD methods (add, find, update, delete)
 - Handles authentication, retries with exponential backoff, and error conversion
 - Base URL: `https://api.appsheet.com/api/v2`
-- All operations require: appId, applicationAccessKey, tableName
-- **User Configuration**: Optional global `runAsUserEmail` config automatically injected into all requests
-  - Set globally in AppSheetClient constructor: `new AppSheetClient({ appId, applicationAccessKey, runAsUserEmail: 'user@example.com' })`
-  - Per-operation override possible via `properties.RunAsUserEmail`
-  - Required for operations that need user context (permissions, auditing, etc.)
+- **v3.0.0 Constructor**: `new AppSheetClient(connectionDef, runAsUserEmail)`
+  - `connectionDef`: Full ConnectionDefinition with appId, applicationAccessKey, and tables
+  - `runAsUserEmail`: Email of user to execute all operations as (required)
+- **`getTable(tableName)`**: Returns TableDefinition for a table in the connection
 - **Response Handling**: Automatically handles both AppSheet API response formats:
   - Standard format: `{ Rows: [...], Warnings?: [...] }`
   - Direct array format: `[...]` (automatically converted to standard format)
@@ -115,25 +114,32 @@ npx appsheet inspect --help  # After npm install (uses bin entry)
 - Validates schema structure before use
 
 **SchemaManager** (`src/utils/SchemaManager.ts`)
-- Central management class that:
-  1. Validates loaded schema
-  2. Initializes ConnectionManager with all connections
-  3. Creates DynamicTable instances on-the-fly (no caching)
-  4. Provides `table<T>(connection, tableName, runAsUserEmail?)` method
-- **Per-Request User Context**: Optional `runAsUserEmail` parameter on `table()` method
-  - Creates user-specific table clients on-the-fly without caching
-  - Enables multi-tenant MCP servers with per-request user context
-  - Backward compatible: omit parameter for default behavior
+- Central management class using factory injection (v3.0.0)
+- **v3.0.0 Constructor**: `new SchemaManager(clientFactory, schema)`
+  - `clientFactory`: AppSheetClientFactoryInterface (use AppSheetClientFactory or MockAppSheetClientFactory)
+  - `schema`: SchemaConfig from SchemaLoader
+- **`table<T>(connection, tableName, runAsUserEmail)`**: Creates DynamicTable instances on-the-fly
+  - `runAsUserEmail` is required in v3.0.0 (not optional)
+  - Each call creates a new client instance (lightweight operation)
+- **`getTableDefinition(connection, tableName)`**: Returns TableDefinition or undefined
+- **`getFieldDefinition(connection, tableName, fieldName)`**: Returns FieldDefinition or undefined
+- **`getAllowedValues(connection, tableName, fieldName)`**: Returns allowed values for Enum/EnumList fields
 - Entry point for schema-based usage pattern
 
 **ConnectionManager** (`src/utils/ConnectionManager.ts`)
-- Manages multiple AppSheet app connections by name
-- Enables multi-instance support (multiple apps in one project)
-- **Per-Request User Context**: Optional `runAsUserEmail` parameter on `get()` method
-  - Creates user-specific clients on-the-fly without caching
-  - Overrides global `runAsUserEmail` from schema when provided
-  - Backward compatible: omit parameter to get default client
-- Provides health check functionality
+- Simplified in v3.0.0 to use factory injection
+- **v3.0.0 Constructor**: `new ConnectionManager(clientFactory, schema)`
+  - `clientFactory`: AppSheetClientFactoryInterface
+  - `schema`: SchemaConfig containing connection definitions
+- **`get(connectionName, runAsUserEmail)`**: Creates client instances on-demand
+  - Both parameters are required (no default/optional user)
+- **`list()`**: Returns array of connection names
+- **`has(connectionName)`**: Checks if connection exists
+
+**Factory Classes** (v3.0.0)
+- **AppSheetClientFactory**: Creates real AppSheetClient instances
+- **MockAppSheetClientFactory**: Creates MockAppSheetClient instances for testing
+- **DynamicTableFactory**: Creates DynamicTable instances from schema
 
 ### CLI Tool
 
@@ -187,47 +193,108 @@ connections:
 - **References**: Ref, RefList
 - **Special**: Color, Show
 
-### Two Usage Patterns
+### Two Usage Patterns (v3.0.0)
 
 **Pattern 1: Direct Client**
 ```typescript
-const client = new AppSheetClient({
-  appId,
-  applicationAccessKey,
-  runAsUserEmail: 'user@example.com'  // Optional
-});
-await client.findAll('TableName');
+const connectionDef: ConnectionDefinition = {
+  appId: 'app-id',
+  applicationAccessKey: 'access-key',
+  tables: {
+    users: { tableName: 'extract_user', keyField: 'id', fields: {...} }
+  }
+};
+const client = new AppSheetClient(connectionDef, 'user@example.com');
+await client.findAll('extract_user');
 ```
 
-**Pattern 2: Schema-Based** (Recommended)
+**Pattern 2: Schema-Based with Factory Injection** (Recommended)
 ```typescript
+import {
+  SchemaLoader,
+  SchemaManager,
+  AppSheetClientFactory
+} from '@techdivision/appsheet';
+
+// Production setup
+const clientFactory = new AppSheetClientFactory();
 const schema = SchemaLoader.fromYaml('./config/schema.yaml');
-const db = new SchemaManager(schema);
+const db = new SchemaManager(clientFactory, schema);
 
-// Default behavior (uses global user from schema if configured)
-const table = db.table<Type>('connection', 'tableName');
-await table.findAll();
-
-// Per-request user context (new in v2.1.0)
-const userTable = db.table<Type>('connection', 'tableName', 'user@example.com');
-await userTable.findAll();  // Executes as user@example.com
+// Get table for user (runAsUserEmail is required in v3.0.0)
+const table = db.table<Type>('connection', 'tableName', 'user@example.com');
+await table.findAll();  // Executes as user@example.com
 ```
 
-**Pattern 3: Multi-Tenant MCP Server** (New in v2.1.0)
+**Pattern 3: Testing with Mock Factory**
 ```typescript
-// MCP Server with per-request user context
-const schema = SchemaLoader.fromYaml('./config/schema.yaml');
-const db = new SchemaManager(schema);
+import {
+  MockAppSheetClientFactory,
+  SchemaManager,
+  MockDataProvider
+} from '@techdivision/appsheet';
 
-// Handler for MCP request with authenticated user
-async function handleToolCall(toolName: string, params: any, userEmail: string) {
-  // Create user-specific table client on-the-fly
+// Test setup with mock factory
+const testData: MockDataProvider = {
+  getTables: () => new Map([
+    ['extract_user', { rows: [...], keyField: 'id' }]
+  ])
+};
+const mockFactory = new MockAppSheetClientFactory(testData);
+const db = new SchemaManager(mockFactory, schema);
+
+// Test operations without hitting real API
+const table = db.table('worklog', 'users', 'test@example.com');
+const users = await table.findAll();  // Returns seeded test data
+```
+
+**Pattern 4: Multi-Tenant MCP Server**
+```typescript
+// Single SchemaManager instance for entire server
+const clientFactory = new AppSheetClientFactory();
+const db = new SchemaManager(clientFactory, SchemaLoader.fromYaml('./schema.yaml'));
+
+// MCP tool handler with per-request user context
+server.tool('list_worklogs', async (params, context) => {
+  // Extract user from MCP context
+  const userEmail = context.user?.email;
+
+  // Create user-specific table client (lightweight, on-demand)
   const table = db.table('worklog', 'worklogs', userEmail);
 
-  // All operations execute with user's permissions
-  const worklogs = await table.findAll();
-  return worklogs;
+  // All operations execute with user's AppSheet permissions
+  return await table.findAll();
+});
+```
+
+### Schema Introspection (v3.0.0)
+
+Access schema metadata directly without navigating nested structures:
+
+```typescript
+// Get table definition
+const tableDef = db.getTableDefinition('default', 'service_portfolio');
+// → { tableName: 'service_portfolio', keyField: 'id', fields: {...} }
+
+// Get field definition
+const statusField = db.getFieldDefinition('default', 'service_portfolio', 'status');
+// → { type: 'Enum', allowedValues: ['Active', 'Inactive'], required: true }
+
+// Get allowed values for Enum field (shortcut)
+const statusValues = db.getAllowedValues('default', 'service_portfolio', 'status');
+// → ['Active', 'Inactive', 'Pending']
+
+// Use case: Generate Zod enum schema
+const values = db.getAllowedValues('default', 'users', 'role');
+if (values) {
+  const roleEnum = z.enum(values as [string, ...string[]]);
 }
+
+// Use case: Populate UI dropdown
+const options = db.getAllowedValues('default', 'users', 'status')?.map(v => ({
+  label: v,
+  value: v
+}));
 ```
 
 ### Validation Examples
@@ -267,72 +334,30 @@ await table.add([{ discount: 1.5 }]);
 // ❌ ValidationError: Field "discount" must be between 0.00 and 1.00
 ```
 
-### Per-Request User Context (v2.1.0)
+### Factory Injection Pattern (v3.0.0)
 
-**Feature**: Execute operations with per-request user context in multi-tenant environments.
+**Feature**: Dependency injection via factory interfaces enables easy testing and flexible instantiation.
 
-**Use Cases**:
-- Multi-tenant MCP servers where different authenticated users make requests
-- Row-level security and permissions enforcement by AppSheet
-- User-specific audit trails and tracking
-- User-based data filtering and access control
+**Key Interfaces**:
+- `AppSheetClientFactoryInterface`: Creates client instances
+- `DynamicTableFactoryInterface`: Creates table instances
 
-**ConnectionManager Usage**:
+**Production vs Test**:
 ```typescript
-const manager = new ConnectionManager();
-manager.register({
-  name: 'worklog',
-  appId: 'app-id',
-  applicationAccessKey: 'key',
-  runAsUserEmail: 'default@example.com'  // Optional global default
-});
+// Production: Use AppSheetClientFactory
+const prodFactory = new AppSheetClientFactory();
+const prodDb = new SchemaManager(prodFactory, schema);
 
-// Get default client (uses global user or no user)
-const defaultClient = manager.get('worklog');
-
-// Get user-specific client (creates new instance with user context)
-const userClient = manager.get('worklog', 'user@example.com');
-await userClient.findAll('worklogs');  // Executes as user@example.com
+// Testing: Use MockAppSheetClientFactory
+const testFactory = new MockAppSheetClientFactory(mockData);
+const testDb = new SchemaManager(testFactory, schema);
 ```
 
-**SchemaManager Usage**:
-```typescript
-const schema = SchemaLoader.fromYaml('./config/schema.yaml');
-const db = new SchemaManager(schema);
-
-// Get default table client
-const table = db.table('worklog', 'worklogs');
-
-// Get user-specific table client (creates new instance)
-const userTable = db.table('worklog', 'worklogs', 'user@example.com');
-await userTable.findAll();  // Executes as user@example.com
-```
-
-**Important Notes**:
-- User-specific clients are created on-the-fly (not cached) - this is a lightweight operation
-- Parameter `runAsUserEmail` overrides any global `runAsUserEmail` from schema
-- Omitting the parameter returns default client (backward compatible)
-- Each call with `runAsUserEmail` creates a new client instance
-- DynamicTable and AppSheetClient are lightweight, so on-the-fly creation is efficient
-
-**MCP Server Example**:
-```typescript
-// Single SchemaManager instance for entire server
-const db = new SchemaManager(SchemaLoader.fromYaml('./schema.yaml'));
-
-// MCP tool handler with per-request user context
-server.tool('list_worklogs', async (params, context) => {
-  // Extract user from MCP context (authentication handled by MCP framework)
-  const userEmail = context.user?.email;
-
-  // Create user-specific table client
-  const table = db.table('worklog', 'worklogs', userEmail);
-
-  // All operations execute with user's AppSheet permissions
-  const worklogs = await table.findAll();
-  return worklogs;
-});
-```
+**Benefits**:
+- Easy unit testing without mocking complex dependencies
+- No need to mock axios or network calls
+- Test data can be pre-seeded via MockDataProvider
+- Same code paths for production and test environments
 
 ### Error Handling
 
@@ -376,43 +401,61 @@ Retry logic applies to network errors and 5xx server errors (max 3 attempts by d
 
 **Note**: The AppSheet API may return responses in either format. The AppSheetClient automatically normalizes both formats to the standard `{ Rows: [...], Warnings?: [...] }` structure for consistent handling.
 
+## Breaking Changes (v3.0.0)
+
+**⚠️ IMPORTANT**: Version 3.0.0 introduces breaking changes. See MIGRATION.md for upgrade guide.
+
+### v3.0.0 Breaking Changes
+
+**AppSheetClient**:
+- ❌ Old: `new AppSheetClient({ appId, applicationAccessKey, runAsUserEmail? })`
+- ✅ New: `new AppSheetClient(connectionDef, runAsUserEmail)`
+- ❌ `getConfig()` removed - use `getTable()` instead
+
+**ConnectionManager**:
+- ❌ Old: `new ConnectionManager()` + `register()` + `get(name, userEmail?)`
+- ✅ New: `new ConnectionManager(clientFactory, schema)` + `get(name, userEmail)`
+- ❌ `register()`, `remove()`, `clear()`, `ping()`, `healthCheck()` removed
+- ✅ `list()` and `has()` added for introspection
+
+**SchemaManager**:
+- ❌ Old: `new SchemaManager(schema)` + `table(conn, table, userEmail?)`
+- ✅ New: `new SchemaManager(clientFactory, schema)` + `table(conn, table, userEmail)`
+- ❌ `getConnectionManager()` and `reload()` removed
+- ✅ `hasConnection()` and `hasTable()` added
+
+**MockAppSheetClient**:
+- ❌ Old: `new MockAppSheetClient({ appId, applicationAccessKey })`
+- ✅ New: `new MockAppSheetClient(connectionDef, runAsUserEmail, dataProvider?)`
+
+### v3.0.0 Migration Example
+```typescript
+// ❌ Old (v2.x)
+const client = new AppSheetClient({
+  appId: 'app-id',
+  applicationAccessKey: 'key',
+  runAsUserEmail: 'user@example.com'
+});
+const db = new SchemaManager(schema);
+const table = db.table('conn', 'tableName');  // optional user
+
+// ✅ New (v3.0.0)
+const connectionDef = { appId: 'app-id', applicationAccessKey: 'key', tables: {...} };
+const client = new AppSheetClient(connectionDef, 'user@example.com');
+
+const clientFactory = new AppSheetClientFactory();
+const db = new SchemaManager(clientFactory, schema);
+const table = db.table('conn', 'tableName', 'user@example.com');  // required user
+```
+
 ## Breaking Changes (v2.0.0)
 
-**⚠️ IMPORTANT**: Version 2.0.0 introduces breaking changes. See MIGRATION.md for upgrade guide.
-
-### Removed Features
-- ❌ Old generic types (`'string'`, `'number'`, `'boolean'`, `'date'`, `'array'`, `'object'`) are no longer supported
-- ❌ Shorthand string format for field definitions (`"email": "string"`) is no longer supported
+### v2.0.0 Schema Changes
+- ❌ Old generic types (`'string'`, `'number'`, etc.) no longer supported
+- ❌ Shorthand string format (`"email": "string"`) no longer supported
 - ❌ `enum` property renamed to `allowedValues`
-
-### New Requirements
-- ✅ All fields must use full FieldDefinition object with `type` property
-- ✅ Only AppSheet-specific types are supported (Text, Email, Number, etc.)
-- ✅ Schema validation is stricter and more comprehensive
-
-### Migration Example
-```yaml
-# ❌ Old schema (v1.x) - NO LONGER WORKS
-fields:
-  email: string
-  age: number
-  status:
-    type: string
-    enum: ["Active", "Inactive"]
-
-# ✅ New schema (v2.0.0)
-fields:
-  email:
-    type: Email
-    required: true
-  age:
-    type: Number
-    required: false
-  status:
-    type: Enum
-    required: true
-    allowedValues: ["Active", "Inactive"]
-```
+- ✅ All fields must use full FieldDefinition with `type` property
+- ✅ Only AppSheet-specific types supported (Text, Email, Number, etc.)
 
 ## Documentation
 
@@ -449,37 +492,55 @@ docs/
 
 ## Testing
 
-### MockAppSheetClient
-For testing purposes, use `MockAppSheetClient` (`src/client/MockAppSheetClient.ts`):
-- In-memory mock implementation of `AppSheetClientInterface`
-- Implements the same interface as `AppSheetClient` for easy swapping in tests
-- Stores data in memory without making API calls
-- Useful for unit tests and local development
-- Fully tested with comprehensive test suite
+### Factory-Based Testing (v3.0.0)
+
+Use `MockAppSheetClientFactory` for testing without hitting the real AppSheet API:
 
 ```typescript
-import { MockAppSheetClient, AppSheetClientInterface } from '@techdivision/appsheet';
+import {
+  MockAppSheetClientFactory,
+  SchemaManager,
+  MockDataProvider,
+  ConnectionDefinition
+} from '@techdivision/appsheet';
 
-// Direct usage
-const mockClient = new MockAppSheetClient({
-  appId: 'mock-app',
-  applicationAccessKey: 'mock-key'
-});
-await mockClient.addOne('Users', { id: '1', name: 'Test' });
-const users = await mockClient.findAll('Users'); // Returns mock data
+// Define connection for direct client testing
+const connectionDef: ConnectionDefinition = {
+  appId: 'test-app',
+  applicationAccessKey: 'test-key',
+  tables: {
+    users: { tableName: 'extract_user', keyField: 'id', fields: {...} }
+  }
+};
 
-// Using interface for polymorphism
-function processUsers(client: AppSheetClientInterface) {
-  return client.findAll('Users');
-}
+// Option 1: Direct MockAppSheetClient usage
+const mockClient = new MockAppSheetClient(connectionDef, 'test@example.com');
+await mockClient.addOne('extract_user', { id: '1', name: 'Test' });
+const users = await mockClient.findAll('extract_user');
 
-// Works with both real and mock clients
-const realClient = new AppSheetClient({ appId, applicationAccessKey });
-const mockClient = new MockAppSheetClient({ appId, applicationAccessKey });
+// Option 2: Factory injection with SchemaManager (recommended)
+const mockFactory = new MockAppSheetClientFactory();
+const db = new SchemaManager(mockFactory, schema);
+const table = db.table('worklog', 'users', 'test@example.com');
+await table.add([{ id: '1', name: 'Test' }]);
 
-await processUsers(realClient); // Uses real API
-await processUsers(mockClient); // Uses in-memory data
+// Option 3: Pre-seeded test data via MockDataProvider
+const testData: MockDataProvider = {
+  getTables: () => new Map([
+    ['extract_user', { rows: [{ id: '1', name: 'Alice' }], keyField: 'id' }]
+  ])
+};
+const seededFactory = new MockAppSheetClientFactory(testData);
+const seededDb = new SchemaManager(seededFactory, schema);
+const table = seededDb.table('worklog', 'users', 'test@example.com');
+const users = await table.findAll();  // Returns pre-seeded data
 ```
+
+### MockAppSheetClient
+- In-memory mock implementation of `AppSheetClientInterface`
+- **v3.0.0 Constructor**: `new MockAppSheetClient(connectionDef, runAsUserEmail, dataProvider?)`
+- Stores data in memory without making API calls
+- Fully tested with comprehensive test suite
 
 ### Test Configuration
 - Tests use Jest with ts-jest preset

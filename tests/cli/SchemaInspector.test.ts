@@ -4,6 +4,7 @@
 
 import { SchemaInspector } from '../../src/cli/SchemaInspector';
 import { AppSheetClient } from '../../src/client/AppSheetClient';
+import { ConnectionDefinition } from '../../src/types';
 
 // Mock AppSheetClient
 jest.mock('../../src/client/AppSheetClient');
@@ -12,11 +13,25 @@ describe('SchemaInspector', () => {
   let mockClient: jest.Mocked<AppSheetClient>;
   let inspector: SchemaInspector;
 
+  const mockConnectionDef: ConnectionDefinition = {
+    appId: 'test-app-id',
+    applicationAccessKey: 'test-key',
+    tables: {
+      users: {
+        tableName: 'users',
+        keyField: 'id',
+        fields: {
+          id: { type: 'Text', required: true },
+        },
+      },
+    },
+  };
+
   beforeEach(() => {
-    mockClient = new AppSheetClient({
-      appId: 'test',
-      applicationAccessKey: 'test',
-    }) as jest.Mocked<AppSheetClient>;
+    mockClient = new AppSheetClient(
+      mockConnectionDef,
+      'test@example.com'
+    ) as jest.Mocked<AppSheetClient>;
 
     inspector = new SchemaInspector(mockClient);
   });

@@ -6,8 +6,9 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import {
-  AppSheetConfig,
   AppSheetClientInterface,
+  ConnectionDefinition,
+  TableDefinition,
   RequestProperties,
   AddOptions,
   FindOptions,
@@ -32,67 +33,76 @@ import {
  * This is the main client class that provides methods for creating, reading,
  * updating, and deleting data from AppSheet tables via the AppSheet API v2.
  *
+ * In v3.0.0, the client accepts a full ConnectionDefinition (including table schemas)
+ * and a required runAsUserEmail parameter for per-request user context.
+ *
  * @category Client
  *
  * @example
  * ```typescript
- * const client = new AppSheetClient({
+ * // v3.0.0 usage with ConnectionDefinition
+ * const connectionDef: ConnectionDefinition = {
  *   appId: 'your-app-id',
  *   applicationAccessKey: 'your-access-key',
- *   runAsUserEmail: 'default@example.com'  // Global default
- * });
+ *   tables: {
+ *     users: {
+ *       tableName: 'extract_user',
+ *       keyField: 'id',
+ *       fields: { ... }
+ *     }
+ *   }
+ * };
  *
- * // Find all rows (runs as default@example.com)
- * const users = await client.findAll('Users');
+ * const client = new AppSheetClient(connectionDef, 'user@example.com');
  *
- * // Add a row with different user (per-operation override)
- * await client.addOne('Users', { name: 'John', email: 'john@example.com' });
+ * // Find all rows
+ * const users = await client.findAll('extract_user');
  *
- * // Override runAsUserEmail for specific operation
- * await client.add({
- *   tableName: 'Users',
- *   rows: [{ name: 'Jane' }],
- *   properties: { RunAsUserEmail: 'admin@example.com' }
- * });
+ * // Get table definition
+ * const tableDef = client.getTable('users');
+ * console.log(tableDef.tableName); // 'extract_user'
  * ```
  */
 export class AppSheetClient implements AppSheetClientInterface {
   private readonly axios: AxiosInstance;
-  private readonly config: Required<Omit<AppSheetConfig, 'runAsUserEmail'>> & { runAsUserEmail?: string };
+  private readonly connectionDef: ConnectionDefinition;
+  private readonly runAsUserEmail: string;
+  private readonly retryAttempts: number;
 
   /**
    * Creates a new AppSheet API client instance.
    *
-   * @param config - Configuration for the AppSheet client
-   * @throws {ValidationError} If required configuration fields are missing
+   * @param connectionDef - Full connection definition including app credentials and table schemas
+   * @param runAsUserEmail - Email of the user to execute all operations as (required)
    *
    * @example
    * ```typescript
-   * const client = new AppSheetClient({
+   * const connectionDef: ConnectionDefinition = {
    *   appId: process.env.APPSHEET_APP_ID!,
    *   applicationAccessKey: process.env.APPSHEET_ACCESS_KEY!,
    *   timeout: 60000,  // Optional: 60 seconds
-   *   retryAttempts: 5,  // Optional: retry 5 times
-   *   runAsUserEmail: 'user@example.com'  // Optional: run all operations as this user
-   * });
+   *   tables: { ... }
+   * };
+   *
+   * const client = new AppSheetClient(connectionDef, 'user@example.com');
    * ```
    */
-  constructor(config: AppSheetConfig) {
+  constructor(connectionDef: ConnectionDefinition, runAsUserEmail: string) {
+    this.connectionDef = connectionDef;
+    this.runAsUserEmail = runAsUserEmail;
+    this.retryAttempts = 3; // Default retry attempts
+
     // Apply defaults
-    this.config = {
-      baseUrl: 'https://api.appsheet.com/api/v2',
-      timeout: 30000,
-      retryAttempts: 3,
-      ...config,
-    };
+    const baseUrl = connectionDef.baseUrl || 'https://api.appsheet.com/api/v2';
+    const timeout = connectionDef.timeout || 30000;
 
     // Create axios instance
     this.axios = axios.create({
-      baseURL: this.config.baseUrl,
-      timeout: this.config.timeout,
+      baseURL: baseUrl,
+      timeout: timeout,
       headers: {
         'Content-Type': 'application/json',
-        ApplicationAccessKey: this.config.applicationAccessKey,
+        ApplicationAccessKey: connectionDef.applicationAccessKey,
       },
     });
   }
@@ -120,7 +130,7 @@ export class AppSheetClient implements AppSheetClientInterface {
    * ```
    */
   async add<T = Record<string, any>>(options: AddOptions<T>): Promise<AddResponse<T>> {
-    const url = `/apps/${this.config.appId}/tables/${options.tableName}/Action`;
+    const url = `/apps/${this.connectionDef.appId}/tables/${options.tableName}/Action`;
 
     const payload = {
       Action: 'Add',
@@ -159,7 +169,7 @@ export class AppSheetClient implements AppSheetClientInterface {
    * ```
    */
   async find<T = Record<string, any>>(options: FindOptions): Promise<FindResponse<T>> {
-    const url = `/apps/${this.config.appId}/tables/${options.tableName}/Action`;
+    const url = `/apps/${this.connectionDef.appId}/tables/${options.tableName}/Action`;
 
     const properties = this.mergeProperties(options.properties);
     if (options.selector) {
@@ -205,7 +215,7 @@ export class AppSheetClient implements AppSheetClientInterface {
    * ```
    */
   async update<T = Record<string, any>>(options: UpdateOptions<T>): Promise<UpdateResponse<T>> {
-    const url = `/apps/${this.config.appId}/tables/${options.tableName}/Action`;
+    const url = `/apps/${this.connectionDef.appId}/tables/${options.tableName}/Action`;
 
     const payload = {
       Action: 'Edit',
@@ -246,7 +256,7 @@ export class AppSheetClient implements AppSheetClientInterface {
    * ```
    */
   async delete<T = Record<string, any>>(options: DeleteOptions<T>): Promise<DeleteResponse> {
-    const url = `/apps/${this.config.appId}/tables/${options.tableName}/Action`;
+    const url = `/apps/${this.connectionDef.appId}/tables/${options.tableName}/Action`;
 
     const payload = {
       Action: 'Delete',
@@ -376,12 +386,9 @@ export class AppSheetClient implements AppSheetClientInterface {
    * Per-operation properties take precedence over global config.
    */
   private mergeProperties(operationProperties?: RequestProperties): RequestProperties {
-    const properties: RequestProperties = {};
-
-    // Add global runAsUserEmail if configured
-    if (this.config.runAsUserEmail) {
-      properties.RunAsUserEmail = this.config.runAsUserEmail;
-    }
+    const properties: RequestProperties = {
+      RunAsUserEmail: this.runAsUserEmail,
+    };
 
     // Merge with operation-specific properties (takes precedence)
     if (operationProperties) {
@@ -417,7 +424,7 @@ export class AppSheetClient implements AppSheetClientInterface {
 
         // Retry on network errors or 5xx server errors
         if (
-          attempt < this.config.retryAttempts &&
+          attempt < this.retryAttempts &&
           (this.isRetryableError(axiosError) || this.isServerError(axiosError))
         ) {
           // Exponential backoff
@@ -487,13 +494,28 @@ export class AppSheetClient implements AppSheetClientInterface {
   }
 
   /**
-   * Get the current client configuration.
+   * Get a table definition by name.
    *
-   * Returns a readonly copy of the configuration with all defaults applied.
+   * Returns the TableDefinition for the specified table from the client's
+   * ConnectionDefinition. Used by DynamicTableFactory to create DynamicTable instances.
    *
-   * @returns The client configuration
+   * @param tableName - The schema name of the table (not the AppSheet table name)
+   * @returns The TableDefinition for the specified table
+   * @throws {Error} If the table doesn't exist in the connection
+   *
+   * @example
+   * ```typescript
+   * const tableDef = client.getTable('users');
+   * console.log(tableDef.tableName); // 'extract_user'
+   * console.log(tableDef.keyField);  // 'id'
+   * ```
    */
-  getConfig(): Readonly<Required<Omit<AppSheetConfig, 'runAsUserEmail'>> & { runAsUserEmail?: string }> {
-    return { ...this.config };
+  getTable(tableName: string): TableDefinition {
+    const tableDef = this.connectionDef.tables[tableName];
+    if (!tableDef) {
+      const available = Object.keys(this.connectionDef.tables).join(', ') || 'none';
+      throw new Error(`Table "${tableName}" not found. Available tables: ${available}`);
+    }
+    return tableDef;
   }
 }

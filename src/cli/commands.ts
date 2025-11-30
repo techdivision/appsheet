@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import { AppSheetClient } from '../client';
 import { SchemaInspector } from './SchemaInspector';
 import { SchemaLoader } from '../utils';
-import { SchemaConfig } from '../types';
+import { SchemaConfig, ConnectionDefinition } from '../types';
 
 /**
  * Create CLI program with all commands
@@ -59,12 +59,18 @@ export function createCLI(): Command {
     .option('--auto-discover', 'Attempt to automatically discover all tables', false)
     .action(async (options) => {
       try {
-        const client = new AppSheetClient({
+        // Create a minimal connection definition for inspection
+        // (tables are not known yet - we're discovering them)
+        const connectionDef: ConnectionDefinition = {
           appId: options.appId,
           applicationAccessKey: options.accessKey,
-          runAsUserEmail: options.runAsUserEmail,
-        });
+          tables: {}, // Empty - schema is being generated
+        };
 
+        // runAsUserEmail is required in v3.0.0 - use provided or default
+        const runAsUserEmail = options.runAsUserEmail || 'cli@appsheet.local';
+
+        const client = new AppSheetClient(connectionDef, runAsUserEmail);
         const inspector = new SchemaInspector(client);
         let tableNames: string[];
 
@@ -153,10 +159,9 @@ export function createCLI(): Command {
 
         // Create client from existing connection config
         const connDef = schema.connections[connection];
-        const client = new AppSheetClient({
-          appId: connDef.appId,
-          applicationAccessKey: connDef.applicationAccessKey,
-        });
+        // runAsUserEmail is required in v3.0.0 - use schema config or default
+        const runAsUserEmail = connDef.runAsUserEmail || 'cli@appsheet.local';
+        const client = new AppSheetClient(connDef, runAsUserEmail);
 
         const inspector = new SchemaInspector(client);
 
