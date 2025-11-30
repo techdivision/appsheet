@@ -4,13 +4,14 @@ A generic TypeScript library for AppSheet CRUD operations, designed for building
 
 ## Features
 
-- 🚀 Full CRUD operations for AppSheet tables
-- 📝 Runtime schema loading from YAML/JSON
-- 🔧 CLI tool for schema generation and management
-- 🔒 Type-safe API with TypeScript
-- 🌐 Multi-instance support (multiple AppSheet apps)
-- ✅ Schema-based validation
-- 🔄 Connection management with health checks
+- Full CRUD operations for AppSheet tables
+- Runtime schema loading from YAML/JSON
+- CLI tool for schema generation and management
+- Type-safe API with TypeScript
+- Multi-instance support (multiple AppSheet apps)
+- Schema-based validation with 27 AppSheet field types
+- Factory injection for dependency injection and testing (v3.0.0)
+- Schema introspection methods (v3.0.0)
 
 ## Installation
 
@@ -69,16 +70,21 @@ npx appsheet inspect \
 
 This creates `config/appsheet-schema.yaml` with your table definitions.
 
-### 2. Use in Your Code
+### 2. Use in Your Code (v3.0.0)
 
 ```typescript
-import { SchemaLoader, SchemaManager } from '@techdivision/appsheet';
+import {
+  SchemaLoader,
+  SchemaManager,
+  AppSheetClientFactory
+} from '@techdivision/appsheet';
 
-// Load schema
+// Load schema with factory injection (v3.0.0)
 const schema = SchemaLoader.fromYaml('./config/appsheet-schema.yaml');
-const db = new SchemaManager(schema);
+const clientFactory = new AppSheetClientFactory();
+const db = new SchemaManager(clientFactory, schema);
 
-// Use type-safe table clients
+// Use type-safe table clients (runAsUserEmail required in v3.0.0)
 interface Worklog {
   id: string;
   date: string;
@@ -86,7 +92,7 @@ interface Worklog {
   description: string;
 }
 
-const worklogsTable = db.table<Worklog>('worklog', 'worklogs');
+const worklogsTable = db.table<Worklog>('worklog', 'worklogs', 'user@example.com');
 
 // CRUD operations
 const worklogs = await worklogsTable.findAll();
@@ -98,6 +104,11 @@ await worklogsTable.add([
 
 await worklogsTable.update([{ id: '123', hours: 7 }]);
 await worklogsTable.delete([{ id: '123' }]);
+
+// Schema introspection (v3.0.0)
+const tableDef = db.getTableDefinition('worklog', 'worklogs');
+const fieldDef = db.getFieldDefinition('worklog', 'worklogs', 'status');
+const allowedValues = db.getAllowedValues('worklog', 'worklogs', 'status');
 ```
 
 ## CLI Commands
@@ -116,18 +127,32 @@ npx appsheet add-table <connection> <tableName>
 npx appsheet validate
 ```
 
-## Direct Client Usage
+## Direct Client Usage (v3.0.0)
 
 For simple use cases without schema files:
 
 ```typescript
-import { AppSheetClient } from '@techdivision/appsheet';
+import { AppSheetClient, ConnectionDefinition } from '@techdivision/appsheet';
 
-const client = new AppSheetClient({
+// v3.0.0: ConnectionDefinition with tables required
+const connectionDef: ConnectionDefinition = {
   appId: process.env.APPSHEET_APP_ID!,
   applicationAccessKey: process.env.APPSHEET_ACCESS_KEY!,
-  runAsUserEmail: 'default@example.com',  // Optional: run operations as specific user
-});
+  tables: {
+    users: {
+      tableName: 'Users',
+      keyField: 'id',
+      fields: {
+        id: { type: 'Text', required: true },
+        name: { type: 'Text', required: true },
+        email: { type: 'Email', required: true }
+      }
+    }
+  }
+};
+
+// v3.0.0: runAsUserEmail is required (second parameter)
+const client = new AppSheetClient(connectionDef, 'user@example.com');
 
 // CRUD operations
 const rows = await client.findAll('Users');
@@ -136,13 +161,6 @@ const user = await client.findOne('Users', '[Email] = "john@example.com"');
 await client.addOne('Users', { name: 'John', email: 'john@example.com' });
 await client.updateOne('Users', { id: '123', name: 'John Updated' });
 await client.deleteOne('Users', { id: '123' });
-
-// Override runAsUserEmail for specific operation
-await client.add({
-  tableName: 'Users',
-  rows: [{ name: 'Jane' }],
-  properties: { RunAsUserEmail: 'admin@example.com' }
-});
 ```
 
 ## Multi-Instance Support
@@ -166,8 +184,9 @@ connections:
 ```
 
 ```typescript
-const worklogTable = db.table('worklog', 'worklogs');
-const employeeTable = db.table('hr', 'employees');
+// v3.0.0: runAsUserEmail required
+const worklogTable = db.table('worklog', 'worklogs', 'user@example.com');
+const employeeTable = db.table('hr', 'employees', 'user@example.com');
 ```
 
 ## Examples

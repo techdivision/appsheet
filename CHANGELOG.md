@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SchemaManager Introspection Methods**
   - `hasConnection(connectionName)`: Check if connection exists
   - `hasTable(connectionName, tableName)`: Check if table exists in connection
+  - `getTableDefinition(connectionName, tableName)`: Get TableDefinition or undefined ([#7](https://github.com/techdivision/appsheet/issues/7))
+  - `getFieldDefinition(connectionName, tableName, fieldName)`: Get FieldDefinition or undefined ([#7](https://github.com/techdivision/appsheet/issues/7))
+  - `getAllowedValues(connectionName, tableName, fieldName)`: Get allowed values for Enum/EnumList fields ([#7](https://github.com/techdivision/appsheet/issues/7))
 
 - **ConnectionManager Introspection Methods**
   - `list()`: Returns array of all connection names
@@ -96,7 +99,7 @@ const table = db.table('conn', 'table', runAsUserEmail);  // required user
 ### Technical Details
 
 - **SemVer Level**: MAJOR (breaking changes)
-- **Test Coverage**: 205 tests across 8 test suites
+- **Test Coverage**: 221 tests across 8 test suites
 - **Breaking Changes**: Constructor signatures, required parameters, removed methods
 
 ## [2.1.0] - 2024-11-24

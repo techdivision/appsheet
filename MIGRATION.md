@@ -1,4 +1,169 @@
-# Migration Guide: v1.x → v2.0.0
+# Migration Guide
+
+This guide helps you upgrade between major versions of the AppSheet library.
+
+---
+
+# Migration: v2.x → v3.0.0
+
+## Overview
+
+Version 3.0.0 introduces **breaking changes** for dependency injection and testing support. The main changes are:
+- Factory injection pattern for SchemaManager and ConnectionManager
+- `runAsUserEmail` is now **required** (not optional)
+- New constructor signatures for all main classes
+- New schema introspection methods
+
+## Quick Migration
+
+```typescript
+// ❌ Old (v2.x)
+import { SchemaLoader, SchemaManager, AppSheetClient } from '@techdivision/appsheet';
+
+const client = new AppSheetClient({
+  appId: 'app-id',
+  applicationAccessKey: 'key',
+  runAsUserEmail: 'user@example.com'  // optional
+});
+
+const schema = SchemaLoader.fromYaml('./schema.yaml');
+const db = new SchemaManager(schema);
+const table = db.table('conn', 'tableName');  // userEmail optional
+
+// ✅ New (v3.0.0)
+import {
+  SchemaLoader,
+  SchemaManager,
+  AppSheetClient,
+  AppSheetClientFactory,
+  ConnectionDefinition
+} from '@techdivision/appsheet';
+
+// Direct client usage
+const connectionDef: ConnectionDefinition = {
+  appId: 'app-id',
+  applicationAccessKey: 'key',
+  tables: { /* table definitions */ }
+};
+const client = new AppSheetClient(connectionDef, 'user@example.com');  // required
+
+// Schema-based usage with factory injection
+const schema = SchemaLoader.fromYaml('./schema.yaml');
+const clientFactory = new AppSheetClientFactory();
+const db = new SchemaManager(clientFactory, schema);
+const table = db.table('conn', 'tableName', 'user@example.com');  // required
+```
+
+## Breaking Changes
+
+### 1. AppSheetClient Constructor
+
+```typescript
+// ❌ Old (v2.x)
+const client = new AppSheetClient({
+  appId: 'app-id',
+  applicationAccessKey: 'key',
+  runAsUserEmail: 'user@example.com'  // optional
+});
+
+// ✅ New (v3.0.0)
+const connectionDef: ConnectionDefinition = {
+  appId: 'app-id',
+  applicationAccessKey: 'key',
+  tables: {
+    users: { tableName: 'Users', keyField: 'id', fields: {...} }
+  }
+};
+const client = new AppSheetClient(connectionDef, 'user@example.com');  // required
+```
+
+### 2. SchemaManager Constructor
+
+```typescript
+// ❌ Old (v2.x)
+const db = new SchemaManager(schema);
+
+// ✅ New (v3.0.0)
+const clientFactory = new AppSheetClientFactory();
+const db = new SchemaManager(clientFactory, schema);
+```
+
+### 3. SchemaManager.table() - runAsUserEmail Required
+
+```typescript
+// ❌ Old (v2.x)
+const table = db.table('conn', 'tableName');  // optional user
+const table = db.table('conn', 'tableName', 'user@example.com');
+
+// ✅ New (v3.0.0)
+const table = db.table('conn', 'tableName', 'user@example.com');  // always required
+```
+
+### 4. ConnectionManager Constructor
+
+```typescript
+// ❌ Old (v2.x)
+const connMgr = new ConnectionManager();
+connMgr.register('name', client);
+const client = connMgr.get('name', 'user@example.com');
+
+// ✅ New (v3.0.0)
+const clientFactory = new AppSheetClientFactory();
+const connMgr = new ConnectionManager(clientFactory, schema);
+const client = connMgr.get('name', 'user@example.com');  // both required
+```
+
+### 5. Removed Methods
+
+| Removed | Alternative |
+|---------|-------------|
+| `AppSheetClient.getConfig()` | Use `getTable(tableName)` |
+| `ConnectionManager.register()` | Pass schema to constructor |
+| `ConnectionManager.remove()` | Create new instance |
+| `ConnectionManager.clear()` | Create new instance |
+| `ConnectionManager.ping()` | Removed |
+| `ConnectionManager.healthCheck()` | Removed |
+| `SchemaManager.getConnectionManager()` | Internal only |
+| `SchemaManager.reload()` | Create new instance |
+
+## New Features in v3.0.0
+
+### Schema Introspection Methods
+
+Access schema metadata directly:
+
+```typescript
+// Get table definition
+const tableDef = db.getTableDefinition('default', 'users');
+// → { tableName: 'Users', keyField: 'id', fields: {...} }
+
+// Get field definition
+const fieldDef = db.getFieldDefinition('default', 'users', 'status');
+// → { type: 'Enum', required: true, allowedValues: [...] }
+
+// Get allowed values for Enum fields
+const values = db.getAllowedValues('default', 'users', 'status');
+// → ['Active', 'Inactive', 'Pending']
+```
+
+### Testing with Mock Factory
+
+```typescript
+import { MockAppSheetClientFactory, SchemaManager } from '@techdivision/appsheet';
+
+// Test setup - no real API calls
+const mockFactory = new MockAppSheetClientFactory();
+const db = new SchemaManager(mockFactory, schema);
+
+// Test your code
+const table = db.table('conn', 'users', 'test@example.com');
+await table.add([{ id: '1', name: 'Test' }]);
+const users = await table.findAll();  // Returns in-memory data
+```
+
+---
+
+# Migration: v1.x → v2.0.0
 
 This guide helps you upgrade from version 1.x to 2.0.0 of the AppSheet library.
 

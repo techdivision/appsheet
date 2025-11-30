@@ -847,8 +847,69 @@ const users = await table.findAll(); // Uses mock!
 20. `package.json` - Bump to 3.0.0
 21. `CHANGELOG.md` - Document breaking changes
 
+## Schema Introspection Methods (Issue #7)
+
+As part of v3.0.0, we also implemented convenient schema introspection methods:
+
+### SchemaManager Methods
+
+```typescript
+// Get table definition
+const tableDef = db.getTableDefinition('default', 'users');
+// → { tableName: 'Users', keyField: 'id', fields: {...} }
+
+// Get field definition
+const fieldDef = db.getFieldDefinition('default', 'users', 'status');
+// → { type: 'Enum', required: true, allowedValues: [...] }
+
+// Get allowed values for Enum fields
+const values = db.getAllowedValues('default', 'users', 'status');
+// → ['Active', 'Inactive', 'Pending']
+```
+
+### Use Cases
+
+1. **Zod Schema Generation**: Generate Zod enums from schema `allowedValues`
+2. **OpenAPI Spec Generation**: Generate enum constraints for API documentation
+3. **UI Dropdowns**: Populate select options from schema
+4. **Validation**: Check if a value is valid for an Enum field
+5. **Type Generation**: Generate TypeScript types from schema
+
+### Implementation
+
+```typescript
+// In SchemaManager
+getTableDefinition(connectionName: string, tableName: string): TableDefinition | undefined {
+  const connDef = this.schema.connections[connectionName];
+  return connDef?.tables[tableName];
+}
+
+getFieldDefinition(connectionName: string, tableName: string, fieldName: string): FieldDefinition | undefined {
+  return this.getTableDefinition(connectionName, tableName)?.fields[fieldName];
+}
+
+getAllowedValues(connectionName: string, tableName: string, fieldName: string): string[] | undefined {
+  return this.getFieldDefinition(connectionName, tableName, fieldName)?.allowedValues;
+}
+```
+
+## Implementation Status
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| Phase 1 | AppSheetClient Changes | ✅ Completed |
+| Phase 2 | Factory Interfaces and Classes | ✅ Completed |
+| Phase 3 | ConnectionManager Redesign | ✅ Completed |
+| Phase 4 | SchemaManager Changes | ✅ Completed |
+| Phase 5 | Cleanup | ✅ Completed |
+| Phase 6 | Documentation | ✅ Completed |
+| Phase 7 | Release | 🔄 Pending PR Merge |
+
+**Test Coverage**: 221 tests across 8 test suites
+
 ## Related Issues
 
-- GitHub Issue: https://github.com/techdivision/appsheet/issues/6
+- GitHub Issue: https://github.com/techdivision/appsheet/issues/6 (DI Support)
+- GitHub Issue: https://github.com/techdivision/appsheet/issues/7 (Schema Introspection)
 - JIRA Ticket: SOSO-249
 - Extends: SOSO-248 (Per-request user context - now works with DI!)
