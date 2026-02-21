@@ -19,7 +19,7 @@ export interface AppSheetConfig {
   /** Application Access Key for authentication */
   applicationAccessKey: string;
 
-  /** Optional custom API base URL (default: https://api.appsheet.com/api/v2) */
+  /** Optional custom API base URL (default: https://www.appsheet.com/api/v2) */
   baseUrl?: string;
 
   /** Request timeout in milliseconds (default: 30000) */

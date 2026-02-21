@@ -25,7 +25,9 @@ import {
   NotFoundError,
   RateLimitError,
   NetworkError,
+  SelectorBuilderInterface,
 } from '../types';
+import { SelectorBuilder } from '../utils/SelectorBuilder';
 
 /**
  * AppSheet API client for performing CRUD operations on AppSheet tables.
@@ -68,12 +70,14 @@ export class AppSheetClient implements AppSheetClientInterface {
   private readonly connectionDef: ConnectionDefinition;
   private readonly runAsUserEmail: string;
   private readonly retryAttempts: number;
+  private readonly selectorBuilder: SelectorBuilderInterface;
 
   /**
    * Creates a new AppSheet API client instance.
    *
    * @param connectionDef - Full connection definition including app credentials and table schemas
    * @param runAsUserEmail - Email of the user to execute all operations as (required)
+   * @param selectorBuilder - Optional custom SelectorBuilder for DI/AOP extensibility (defaults to SelectorBuilder)
    *
    * @example
    * ```typescript
@@ -87,13 +91,18 @@ export class AppSheetClient implements AppSheetClientInterface {
    * const client = new AppSheetClient(connectionDef, 'user@example.com');
    * ```
    */
-  constructor(connectionDef: ConnectionDefinition, runAsUserEmail: string) {
+  constructor(
+    connectionDef: ConnectionDefinition,
+    runAsUserEmail: string,
+    selectorBuilder?: SelectorBuilderInterface
+  ) {
     this.connectionDef = connectionDef;
     this.runAsUserEmail = runAsUserEmail;
     this.retryAttempts = 3; // Default retry attempts
+    this.selectorBuilder = selectorBuilder ?? new SelectorBuilder();
 
     // Apply defaults
-    const baseUrl = connectionDef.baseUrl || 'https://api.appsheet.com/api/v2';
+    const baseUrl = connectionDef.baseUrl || 'https://www.appsheet.com/api/v2';
     const timeout = connectionDef.timeout || 30000;
 
     // Create axios instance
@@ -173,7 +182,10 @@ export class AppSheetClient implements AppSheetClientInterface {
 
     const properties = this.mergeProperties(options.properties);
     if (options.selector) {
-      properties.Selector = options.selector;
+      properties.Selector = this.selectorBuilder.ensureFunction(
+        options.selector,
+        options.tableName
+      );
     }
 
     const payload = {
@@ -311,10 +323,7 @@ export class AppSheetClient implements AppSheetClientInterface {
    * }
    * ```
    */
-  async findOne<T = Record<string, any>>(
-    tableName: string,
-    selector: string
-  ): Promise<T | null> {
+  async findOne<T = Record<string, any>>(tableName: string, selector: string): Promise<T | null> {
     const response = await this.find<T>({ tableName, selector });
     return response.rows[0] || null;
   }

@@ -113,6 +113,23 @@ describe('AppSheetClient v3.0.0', () => {
     });
 
     /**
+     * Test: Constructor uses www.appsheet.com as default base URL
+     *
+     * The deprecated api.appsheet.com domain was replaced with www.appsheet.com.
+     * @see SOSO-365
+     * @see https://support.google.com/appsheet/answer/10105398
+     */
+    it('should use www.appsheet.com as default baseUrl', () => {
+      new AppSheetClient(mockConnectionDef, mockRunAsUserEmail);
+
+      expect(mockedAxios.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseURL: 'https://www.appsheet.com/api/v2',
+        })
+      );
+    });
+
+    /**
      * Test: Constructor applies optional settings from ConnectionDefinition
      */
     it('should apply optional settings from ConnectionDefinition', () => {
