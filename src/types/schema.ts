@@ -149,7 +149,7 @@ export interface ConnectionDefinition {
   /** Application Access Key */
   applicationAccessKey: string;
 
-  /** Optional custom base URL */
+  /** Optional custom base URL (default: https://www.appsheet.com/api/v2) */
   baseUrl?: string;
 
   /** Optional request timeout */

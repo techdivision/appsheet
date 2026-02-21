@@ -1,6 +1,15 @@
-# AppSheet TypeScript Library - API Konzept
+# AppSheet TypeScript Library - API Konzept (v1.0 - ARCHIVIERT)
 
-## Übersicht
+> **ARCHIVIERT**: Dieses Dokument war das urspruengliche Planungs- und Designkonzept fuer v1.0.
+> Es spiegelt den Stand der Designphase wider und ist **nicht** repraesentativ fuer die
+> aktuelle Implementierung (v3.1.0). Viele hier beschriebene Features (FilterBuilder,
+> BatchOperations, CachedAppSheetClient, Plugin-System, Event-System, QueryBuilder)
+> wurden bewusst nicht implementiert oder durch andere Patterns ersetzt.
+>
+> **Aktuelle Dokumentation:** Siehe [CLAUDE.md](../../CLAUDE.md) und die Konzeptdokumente
+> unter `docs/SOSO-*/`.
+
+## Uebersicht
 
 Diese Library bietet eine generische, typsichere Schnittstelle für CRUD-Operationen auf beliebige AppSheet-Tabellen. Sie ist speziell für die Verwendung in MCP-Servern und internen Projekten optimiert.
 
@@ -30,12 +39,12 @@ src/
 
 ```typescript
 interface AppSheetConfig {
-  appId: string;                    // AppSheet App-ID
-  applicationAccessKey: string;     // API Access Key
-  runAsUserEmail?: string;          // Optional: Global User-Email für alle Operationen
-  baseUrl?: string;                 // Optional: Custom API URL
-  timeout?: number;                 // Optional: Request Timeout (default: 30000ms)
-  retryAttempts?: number;          // Optional: Anzahl Wiederholungsversuche (default: 3)
+  appId: string; // AppSheet App-ID
+  applicationAccessKey: string; // API Access Key
+  runAsUserEmail?: string; // Optional: Global User-Email für alle Operationen
+  baseUrl?: string; // Optional: Custom API URL
+  timeout?: number; // Optional: Request Timeout (default: 30000ms)
+  retryAttempts?: number; // Optional: Anzahl Wiederholungsversuche (default: 3)
 }
 ```
 
@@ -44,10 +53,11 @@ interface AppSheetConfig {
 ### 2. CRUD-Operationen
 
 #### Add (Create)
+
 ```typescript
 interface AddOptions<T = Record<string, any>> {
   tableName: string;
-  rows: T[];                        // Ein oder mehrere Datensätze
+  rows: T[]; // Ein oder mehrere Datensätze
   properties?: {
     Locale?: string;
     Location?: string;
@@ -58,22 +68,23 @@ interface AddOptions<T = Record<string, any>> {
 }
 
 interface AddResponse<T = Record<string, any>> {
-  rows: T[];                        // Erstellte Datensätze mit Server-generierten Feldern
+  rows: T[]; // Erstellte Datensätze mit Server-generierten Feldern
   warnings?: string[];
 }
 ```
 
 #### Find (Read)
+
 ```typescript
 interface FindOptions {
   tableName: string;
-  selector?: string;                // SQL-ähnlicher Filter (z.B. "_RowNumber > 10")
+  selector?: string; // SQL-ähnlicher Filter (z.B. "_RowNumber > 10")
   properties?: {
     Locale?: string;
     Location?: string;
     Timezone?: string;
     UserId?: string;
-    Selector?: string;              // Alternative zu top-level selector
+    Selector?: string; // Alternative zu top-level selector
   };
 }
 
@@ -84,10 +95,11 @@ interface FindResponse<T = Record<string, any>> {
 ```
 
 #### Update
+
 ```typescript
 interface UpdateOptions<T = Record<string, any>> {
   tableName: string;
-  rows: T[];                        // Datensätze mit Key-Feldern zum Update
+  rows: T[]; // Datensätze mit Key-Feldern zum Update
   properties?: {
     Locale?: string;
     Location?: string;
@@ -98,16 +110,17 @@ interface UpdateOptions<T = Record<string, any>> {
 }
 
 interface UpdateResponse<T = Record<string, any>> {
-  rows: T[];                        // Aktualisierte Datensätze
+  rows: T[]; // Aktualisierte Datensätze
   warnings?: string[];
 }
 ```
 
 #### Delete
+
 ```typescript
 interface DeleteOptions<T = Record<string, any>> {
   tableName: string;
-  rows: T[];                        // Datensätze mit Key-Feldern zum Löschen
+  rows: T[]; // Datensätze mit Key-Feldern zum Löschen
   properties?: {
     Locale?: string;
     Location?: string;
@@ -155,13 +168,13 @@ import { AppSheetClient } from '@techdivision/appsheet';
 const client = new AppSheetClient({
   appId: 'your-app-id',
   applicationAccessKey: 'your-access-key',
-  runAsUserEmail: 'user@example.com'  // Optional: Default User für alle Operationen
+  runAsUserEmail: 'user@example.com', // Optional: Default User für alle Operationen
 });
 
 // Create
 const newUser = await client.addOne('Users', {
   name: 'John Doe',
-  email: 'john@example.com'
+  email: 'john@example.com',
 });
 
 // Read
@@ -171,7 +184,7 @@ const john = await client.findOne<User>('Users', '[Email] = "john@example.com"')
 // Update
 await client.updateOne('Users', {
   id: john.id,
-  name: 'John Smith'
+  name: 'John Smith',
 });
 
 // Delete
@@ -201,9 +214,7 @@ class FilterBuilder {
 // Verwendung
 const filter = new FilterBuilder()
   .equals('Status', 'Active')
-  .and(
-    new FilterBuilder().greaterThan('CreatedDate', new Date('2025-01-01'))
-  )
+  .and(new FilterBuilder().greaterThan('CreatedDate', new Date('2025-01-01')))
   .build();
 // Ergebnis: "[Status] = 'Active' AND [CreatedDate] > '2025-01-01'"
 ```
@@ -289,8 +300,8 @@ class RateLimitError extends AppSheetError {}
 
 ```typescript
 interface CacheOptions {
-  ttl?: number;                     // Time to live in ms
-  maxSize?: number;                 // Max cache entries
+  ttl?: number; // Time to live in ms
+  maxSize?: number; // Max cache entries
 }
 
 class CachedAppSheetClient extends AppSheetClient {
@@ -308,17 +319,20 @@ class CachedAppSheetClient extends AppSheetClient {
 ## API-Endpoint-Struktur
 
 ### Base URL
+
 ```
 https://api.appsheet.com/api/v2/apps/{appId}/tables/{tableName}/Action
 ```
 
 ### HTTP Headers
+
 ```
 ApplicationAccessKey: <your-access-key>
 Content-Type: application/json
 ```
 
 ### Request Body (generisch)
+
 ```json
 {
   "Action": "Add" | "Find" | "Edit" | "Delete",
@@ -341,20 +355,28 @@ Content-Type: application/json
 Die AppSheet API kann Antworten in zwei verschiedenen Formaten zurückgeben:
 
 **Standard-Format** (empfohlen):
+
 ```json
 {
   "Rows": [
-    { /* returned row data */ }
+    {
+      /* returned row data */
+    }
   ],
   "Warnings": ["optional warnings"]
 }
 ```
 
 **Alternatives Format** (direkte Array-Antwort):
+
 ```json
 [
-  { /* row data */ },
-  { /* row data */ }
+  {
+    /* row data */
+  },
+  {
+    /* row data */
+  }
 ]
 ```
 
@@ -363,6 +385,7 @@ Die AppSheet API kann Antworten in zwei verschiedenen Formaten zurückgeben:
 ## Erweiterbarkeit
 
 ### Plugin-System (Optional)
+
 ```typescript
 interface Plugin {
   name: string;
@@ -377,6 +400,7 @@ class AppSheetClient {
 ```
 
 ### Event-System
+
 ```typescript
 class AppSheetClient extends EventEmitter {
   // Events: 'request', 'response', 'error', 'retry'
@@ -399,7 +423,7 @@ connections:
   worklog:
     appId: ${APPSHEET_WORKLOG_APP_ID}
     applicationAccessKey: ${APPSHEET_WORKLOG_ACCESS_KEY}
-    runAsUserEmail: ${APPSHEET_USER_EMAIL}  # Optional: Default User für alle Operationen
+    runAsUserEmail: ${APPSHEET_USER_EMAIL} # Optional: Default User für alle Operationen
     tables:
       worklogs:
         tableName: worklog
@@ -425,7 +449,7 @@ connections:
   hr:
     appId: ${APPSHEET_HR_APP_ID}
     applicationAccessKey: ${APPSHEET_HR_ACCESS_KEY}
-    runAsUserEmail: ${APPSHEET_HR_USER_EMAIL}  # Optional: Unterschiedlicher User pro Connection
+    runAsUserEmail: ${APPSHEET_HR_USER_EMAIL} # Optional: Unterschiedlicher User pro Connection
     tables:
       employees:
         tableName: employees
@@ -507,7 +531,7 @@ export interface TableDefinition {
 export interface ConnectionDefinition {
   appId: string;
   applicationAccessKey: string;
-  runAsUserEmail?: string;          // Optional: Default User für alle Operationen dieser Connection
+  runAsUserEmail?: string; // Optional: Default User für alle Operationen dieser Connection
   baseUrl?: string;
   timeout?: number;
   tables: Record<string, TableDefinition>;
@@ -558,7 +582,7 @@ export class SchemaLoader {
     }
 
     if (Array.isArray(obj)) {
-      return obj.map(item => this.resolveEnvVars(item));
+      return obj.map((item) => this.resolveEnvVars(item));
     }
 
     if (obj && typeof obj === 'object') {
@@ -643,7 +667,7 @@ export class SchemaManager {
         name: connName,
         appId: connDef.appId,
         applicationAccessKey: connDef.applicationAccessKey,
-        runAsUserEmail: connDef.runAsUserEmail,  // Optional: User-Email für diese Connection
+        runAsUserEmail: connDef.runAsUserEmail, // Optional: User-Email für diese Connection
         baseUrl: connDef.baseUrl,
         timeout: connDef.timeout,
       });
@@ -671,7 +695,7 @@ export class SchemaManager {
     if (!table) {
       throw new Error(
         `Table "${tableName}" not found in connection "${connectionName}". ` +
-        `Available tables: ${[...connection.keys()].join(', ')}`
+          `Available tables: ${[...connection.keys()].join(', ')}`
       );
     }
 
@@ -812,14 +836,10 @@ export class DynamicTable<T = Record<string, any>> {
         if (value !== undefined && value !== null) {
           const actualType = typeof value;
           if (fieldType === 'number' && actualType !== 'number') {
-            throw new Error(
-              `Field "${fieldName}" must be a number, got ${actualType}`
-            );
+            throw new Error(`Field "${fieldName}" must be a number, got ${actualType}`);
           }
           if (fieldType === 'boolean' && actualType !== 'boolean') {
-            throw new Error(
-              `Field "${fieldName}" must be a boolean, got ${actualType}`
-            );
+            throw new Error(`Field "${fieldName}" must be a boolean, got ${actualType}`);
           }
           // string, array, object validations...
         }
@@ -827,9 +847,7 @@ export class DynamicTable<T = Record<string, any>> {
         // Enum validation
         if (typeof fieldDef === 'object' && fieldDef.enum && value) {
           if (!fieldDef.enum.includes(value)) {
-            throw new Error(
-              `Field "${fieldName}" must be one of: ${fieldDef.enum.join(', ')}`
-            );
+            throw new Error(`Field "${fieldName}" must be one of: ${fieldDef.enum.join(', ')}`);
           }
         }
       }
@@ -1089,10 +1107,12 @@ export class SchemaInspector {
   private toSchemaName(tableName: string): string {
     // "extract_user" -> "users"
     // "worklog" -> "worklogs"
-    return tableName
-      .replace(/^extract_/, '')
-      .replace(/_/g, '')
-      .toLowerCase() + 's';
+    return (
+      tableName
+        .replace(/^extract_/, '')
+        .replace(/_/g, '')
+        .toLowerCase() + 's'
+    );
   }
 }
 
@@ -1115,10 +1135,7 @@ import * as fs from 'fs';
 export function createCLI() {
   const program = new Command();
 
-  program
-    .name('appsheet')
-    .description('AppSheet Schema Management CLI')
-    .version('1.0.0');
+  program.name('appsheet').description('AppSheet Schema Management CLI').version('1.0.0');
 
   // Command: init
   program
@@ -1137,9 +1154,8 @@ export function createCLI() {
         },
       };
 
-      const output = options.format === 'json'
-        ? JSON.stringify(schema, null, 2)
-        : yaml.stringify(schema);
+      const output =
+        options.format === 'json' ? JSON.stringify(schema, null, 2) : yaml.stringify(schema);
 
       fs.writeFileSync(options.output, output, 'utf-8');
       console.log(`✓ Schema file created: ${options.output}`);
@@ -1166,10 +1182,7 @@ export function createCLI() {
         const tableNames = options.tables.split(',').map((t: string) => t.trim());
 
         console.log(`Inspecting ${tableNames.length} tables...`);
-        const connection = await inspector.generateSchema(
-          options.connectionName,
-          tableNames
-        );
+        const connection = await inspector.generateSchema(options.connectionName, tableNames);
 
         const schema: SchemaConfig = {
           connections: {
@@ -1177,9 +1190,8 @@ export function createCLI() {
           },
         };
 
-        const output = options.format === 'json'
-          ? JSON.stringify(schema, null, 2)
-          : yaml.stringify(schema);
+        const output =
+          options.format === 'json' ? JSON.stringify(schema, null, 2) : yaml.stringify(schema);
 
         fs.writeFileSync(options.output, output, 'utf-8');
         console.log(`✓ Schema generated: ${options.output}`);
@@ -1559,9 +1571,9 @@ export interface Project {
 // 2. Schema-Registry mit Metadaten
 export const tableSchemas = {
   users: {
-    tableName: 'extract_user',           // Tatsächlicher AppSheet Tabellenname
-    keyField: 'id',                       // Primary Key
-    type: {} as User,                     // Type Inference Helper
+    tableName: 'extract_user', // Tatsächlicher AppSheet Tabellenname
+    keyField: 'id', // Primary Key
+    type: {} as User, // Type Inference Helper
   },
   worklogs: {
     tableName: 'worklog',
@@ -1600,21 +1612,25 @@ const client = new AppSheetClient({
 const usersTable = tables.users(client);
 
 // Alle Operationen sind jetzt typsicher!
-const users = await usersTable.findAll();           // Type: User[]
+const users = await usersTable.findAll(); // Type: User[]
 const user = await usersTable.findOne('[Email] = "test@example.com"'); // Type: User | null
 
-await usersTable.add([{
-  id: '123',
-  name: 'John',
-  email: 'john@example.com',
-  role: 'user',              // ✓ Autocomplete + Validation
-  createdAt: new Date(),
-}]);
+await usersTable.add([
+  {
+    id: '123',
+    name: 'John',
+    email: 'john@example.com',
+    role: 'user', // ✓ Autocomplete + Validation
+    createdAt: new Date(),
+  },
+]);
 
-await usersTable.update([{
-  id: '123',
-  name: 'Jane',              // Partial updates möglich
-}]);
+await usersTable.update([
+  {
+    id: '123',
+    name: 'Jane', // Partial updates möglich
+  },
+]);
 
 await usersTable.delete([{ id: '123' }]);
 ```
@@ -1650,8 +1666,8 @@ export const schema = new SchemaBuilder()
     keyField: 'id',
     fields: [
       { name: 'email', required: true, type: 'string' },
-      { name: 'role', required: true, type: 'enum', values: ['admin', 'user'] }
-    ]
+      { name: 'role', required: true, type: 'enum', values: ['admin', 'user'] },
+    ],
   })
   .define<Worklog>({
     name: 'worklogs',
@@ -1710,6 +1726,7 @@ npx @techdivision/appsheet generate-types --config appsheet.config.yaml --output
 ```
 
 Generiert automatisch:
+
 - TypeScript Interfaces
 - Table Registry
 - Validation Functions
@@ -1811,7 +1828,7 @@ export class TypedQueryBuilder<T extends Record<string, any>> {
   }
 
   whereIn(field: keyof T, values: any[]) {
-    const conditions = values.map(v => `[${String(field)}] = "${v}"`).join(' OR ');
+    const conditions = values.map((v) => `[${String(field)}] = "${v}"`).join(' OR ');
     this.filters.push(`(${conditions})`);
     return this;
   }
@@ -1865,7 +1882,11 @@ export const db = {
 import { db } from './db';
 
 const users = await db.users().findAll();
-const worklog = await db.worklogs().add([{ /* ... */ }]);
+const worklog = await db.worklogs().add([
+  {
+    /* ... */
+  },
+]);
 ```
 
 ### Vorteile dieses Ansatzes
@@ -1887,10 +1908,10 @@ Ein MCP-Server muss oft mehrere verschiedene AppSheet-Instanzen ansteuern (z.B. 
 ```typescript
 // src/utils/connectionManager.ts (in der Library)
 export interface ConnectionConfig {
-  name: string;                       // Eindeutiger Name (z.B. "worklog-app", "hr-app")
+  name: string; // Eindeutiger Name (z.B. "worklog-app", "hr-app")
   appId: string;
   applicationAccessKey: string;
-  runAsUserEmail?: string;            // Optional: Default User für alle Operationen dieser Connection
+  runAsUserEmail?: string; // Optional: Default User für alle Operationen dieser Connection
   baseUrl?: string;
   timeout?: number;
   retryAttempts?: number;
@@ -1925,7 +1946,9 @@ export class ConnectionManager {
   get(name: string): AppSheetClient {
     const client = this.connections.get(name);
     if (!client) {
-      throw new Error(`Connection "${name}" not found. Available: ${[...this.connections.keys()].join(', ')}`);
+      throw new Error(
+        `Connection "${name}" not found. Available: ${[...this.connections.keys()].join(', ')}`
+      );
     }
     return client;
   }
@@ -1976,7 +1999,7 @@ export function initializeConnections() {
     name: 'worklog',
     appId: process.env.APPSHEET_WORKLOG_APP_ID!,
     applicationAccessKey: process.env.APPSHEET_WORKLOG_ACCESS_KEY!,
-    runAsUserEmail: process.env.APPSHEET_WORKLOG_USER_EMAIL,  // Optional
+    runAsUserEmail: process.env.APPSHEET_WORKLOG_USER_EMAIL, // Optional
   });
 
   // HR App
@@ -1984,7 +2007,7 @@ export function initializeConnections() {
     name: 'hr',
     appId: process.env.APPSHEET_HR_APP_ID!,
     applicationAccessKey: process.env.APPSHEET_HR_ACCESS_KEY!,
-    runAsUserEmail: process.env.APPSHEET_HR_USER_EMAIL,  // Optional
+    runAsUserEmail: process.env.APPSHEET_HR_USER_EMAIL, // Optional
   });
 
   // Customer Portal App
@@ -1992,7 +2015,7 @@ export function initializeConnections() {
     name: 'customer-portal',
     appId: process.env.APPSHEET_PORTAL_APP_ID!,
     applicationAccessKey: process.env.APPSHEET_PORTAL_ACCESS_KEY!,
-    runAsUserEmail: process.env.APPSHEET_PORTAL_USER_EMAIL,  // Optional
+    runAsUserEmail: process.env.APPSHEET_PORTAL_USER_EMAIL, // Optional
   });
 }
 ```
@@ -2119,7 +2142,7 @@ export function createAppConnection<T extends Record<string, any>>(
 
   // Wandle Registry in Table-Clients um
   const tableClients = {} as {
-    [K in keyof T]: ReturnType<typeof tables[K]>;
+    [K in keyof T]: ReturnType<(typeof tables)[K]>;
   };
 
   for (const key of Object.keys(schemas)) {

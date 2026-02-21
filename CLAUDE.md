@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 This is a generic TypeScript library for AppSheet CRUD operations, designed for building MCP servers and internal tools. The library provides two usage patterns:
+
 1. **Direct client usage** - Simple AppSheetClient for basic operations
 2. **Schema-based usage** - Runtime schema loading from YAML/JSON with type-safe table clients and validation
 
@@ -20,11 +21,11 @@ main    → Production Deployment
 
 ### Branch Rules
 
-| Branch    | CI | Deploy | Purpose |
-|-----------|-----|--------|---------|
+| Branch    | CI  | Deploy | Purpose                       |
+| --------- | --- | ------ | ----------------------------- |
 | `develop` | ✅  | ❌     | Feature integration (CI only) |
-| `staging` | ✅  | ✅     | Pre-production testing |
-| `main`    | ✅  | ✅     | Production releases |
+| `staging` | ✅  | ✅     | Pre-production testing        |
+| `main`    | ✅  | ✅     | Production releases           |
 
 ### Feature Development Flow
 
@@ -79,9 +80,12 @@ npx appsheet inspect --help  # After npm install (uses bin entry)
 ### Core Components
 
 **AppSheetClient** (`src/client/AppSheetClient.ts`)
+
 - Main API client with CRUD methods (add, find, update, delete)
 - Handles authentication, retries with exponential backoff, and error conversion
-- Base URL: `https://api.appsheet.com/api/v2`
+- Base URL: `https://www.appsheet.com/api/v2` (regional endpoints via `baseUrl` override)
+- **Selector wrapping**: `find()` automatically wraps raw boolean expressions in `Filter(tableName, expr)` via `SelectorBuilder` for API compliance
+- Uses `SelectorBuilderInterface` internally (injected as `SelectorBuilder` instance)
 - **v3.0.0 Constructor**: `new AppSheetClient(connectionDef, runAsUserEmail)`
   - `connectionDef`: Full ConnectionDefinition with appId, applicationAccessKey, and tables
   - `runAsUserEmail`: Email of user to execute all operations as (required)
@@ -91,11 +95,13 @@ npx appsheet inspect --help  # After npm install (uses bin entry)
   - Direct array format: `[...]` (automatically converted to standard format)
 
 **AppSheetClientInterface** (`src/types/client.ts`)
+
 - Interface defining the contract for all client implementations
 - Implemented by both AppSheetClient and MockAppSheetClient
 - Ensures type safety and allows swapping implementations in tests
 
 **DynamicTable** (`src/client/DynamicTable.ts`)
+
 - Schema-aware table client with comprehensive AppSheet field type validation
 - Validates all 27 AppSheet field types (Email, URL, Phone, Enum, EnumList, etc.)
 - Format validation (email addresses, URLs, phone numbers, dates, percentages)
@@ -103,17 +109,20 @@ npx appsheet inspect --help  # After npm install (uses bin entry)
 - Created by SchemaManager, not instantiated directly
 
 **Validators** (`src/utils/validators/`)
+
 - **BaseTypeValidator**: JavaScript primitive type validation (string, number, boolean, array)
 - **FormatValidator**: Format-specific validation (Email, URL, Phone, Date, DateTime, Percent)
 - **AppSheetTypeValidator**: Main orchestrator for AppSheet field type validation
 - Modular, reusable validation logic across the codebase
 
 **SchemaLoader** (`src/utils/SchemaLoader.ts`)
+
 - Loads schema from YAML/JSON files
 - Resolves environment variables with `${VAR_NAME}` syntax
 - Validates schema structure before use
 
 **SchemaManager** (`src/utils/SchemaManager.ts`)
+
 - Central management class using factory injection (v3.0.0)
 - **v3.0.0 Constructor**: `new SchemaManager(clientFactory, schema)`
   - `clientFactory`: AppSheetClientFactoryInterface (use AppSheetClientFactory or MockAppSheetClientFactory)
@@ -127,6 +136,7 @@ npx appsheet inspect --help  # After npm install (uses bin entry)
 - Entry point for schema-based usage pattern
 
 **ConnectionManager** (`src/utils/ConnectionManager.ts`)
+
 - Simplified in v3.0.0 to use factory injection
 - **v3.0.0 Constructor**: `new ConnectionManager(clientFactory, schema)`
   - `clientFactory`: AppSheetClientFactoryInterface
@@ -137,6 +147,7 @@ npx appsheet inspect --help  # After npm install (uses bin entry)
 - **`has(connectionName)`**: Checks if connection exists
 
 **Factory Classes** (v3.0.0)
+
 - **AppSheetClientFactory**: Creates real AppSheetClient instances
 - **MockAppSheetClientFactory**: Creates MockAppSheetClient instances for testing
 - **DynamicTableFactory**: Creates DynamicTable instances from schema
@@ -144,15 +155,17 @@ npx appsheet inspect --help  # After npm install (uses bin entry)
 ### CLI Tool
 
 **SchemaInspector** (`src/cli/SchemaInspector.ts`)
+
 - Introspects AppSheet tables by analyzing up to 100 rows
 - Automatically detects all 27 AppSheet field types from actual data
 - Smart Enum detection: Identifies enum fields based on unique value ratio
 - Extracts `allowedValues` for Enum/EnumList fields automatically
 - Pattern detection for Email, URL, Phone, Date, DateTime, Percent
-- Guesses key fields (looks for: id, key, ID, Key, _RowNumber)
+- Guesses key fields (looks for: id, key, ID, Key, \_RowNumber)
 - Converts table names to schema names (e.g., "extract_user" → "users")
 
 **CLI Commands** (`src/cli/commands.ts`)
+
 - `init` - Create empty schema file
 - `inspect` - Generate schema from AppSheet app
   - With `--tables` flag: Generate schema for specific tables
@@ -165,25 +178,27 @@ CLI binary name: `appsheet` (defined in package.json bin field)
 ## Key Design Patterns
 
 ### Schema Structure (v2.0.0)
+
 ```yaml
 connections:
   <connection-name>:
     appId: ${ENV_VAR}
     applicationAccessKey: ${ENV_VAR}
-    runAsUserEmail: user@example.com  # Optional: global user for all operations
+    runAsUserEmail: user@example.com # Optional: global user for all operations
     tables:
       <schema-table-name>:
         tableName: <actual-appsheet-table-name>
         keyField: <primary-key-field>
         fields:
           <field-name>:
-            type: <AppSheetFieldType>  # Required: Text, Email, Number, Enum, etc.
-            required: <boolean>        # Optional: default false
-            allowedValues: [...]       # Optional: for Enum/EnumList
-            description: <string>      # Optional
+            type: <AppSheetFieldType> # Required: Text, Email, Number, Enum, etc.
+            required: <boolean> # Optional: default false
+            allowedValues: [...] # Optional: for Enum/EnumList
+            description: <string> # Optional
 ```
 
 **AppSheet Field Types (27 total):**
+
 - **Core**: Text, Number, Date, DateTime, Time, Duration, YesNo
 - **Specialized Text**: Name, Email, URL, Phone, Address
 - **Specialized Numbers**: Decimal, Percent, Price
@@ -196,6 +211,7 @@ connections:
 ### Two Usage Patterns (v3.0.0)
 
 **Pattern 1: Direct Client**
+
 ```typescript
 const connectionDef: ConnectionDefinition = {
   appId: 'app-id',
@@ -209,12 +225,9 @@ await client.findAll('extract_user');
 ```
 
 **Pattern 2: Schema-Based with Factory Injection** (Recommended)
+
 ```typescript
-import {
-  SchemaLoader,
-  SchemaManager,
-  AppSheetClientFactory
-} from '@techdivision/appsheet';
+import { SchemaLoader, SchemaManager, AppSheetClientFactory } from '@techdivision/appsheet';
 
 // Production setup
 const clientFactory = new AppSheetClientFactory();
@@ -223,10 +236,11 @@ const db = new SchemaManager(clientFactory, schema);
 
 // Get table for user (runAsUserEmail is required in v3.0.0)
 const table = db.table<Type>('connection', 'tableName', 'user@example.com');
-await table.findAll();  // Executes as user@example.com
+await table.findAll(); // Executes as user@example.com
 ```
 
 **Pattern 3: Testing with Mock Factory**
+
 ```typescript
 import {
   MockAppSheetClientFactory,
@@ -249,6 +263,7 @@ const users = await table.findAll();  // Returns seeded test data
 ```
 
 **Pattern 4: Multi-Tenant MCP Server**
+
 ```typescript
 // Single SchemaManager instance for entire server
 const clientFactory = new AppSheetClientFactory();
@@ -291,15 +306,16 @@ if (values) {
 }
 
 // Use case: Populate UI dropdown
-const options = db.getAllowedValues('default', 'users', 'status')?.map(v => ({
+const options = db.getAllowedValues('default', 'users', 'status')?.map((v) => ({
   label: v,
-  value: v
+  value: v,
 }));
 ```
 
 ### Validation Examples
 
 **Schema Definition with AppSheet Types:**
+
 ```yaml
 fields:
   email:
@@ -308,10 +324,10 @@ fields:
   status:
     type: Enum
     required: true
-    allowedValues: ["Active", "Inactive", "Pending"]
+    allowedValues: ['Active', 'Inactive', 'Pending']
   tags:
     type: EnumList
-    allowedValues: ["JavaScript", "TypeScript", "React"]
+    allowedValues: ['JavaScript', 'TypeScript', 'React']
   discount:
     type: Percent
     required: false
@@ -320,6 +336,7 @@ fields:
 ```
 
 **Validation Errors:**
+
 ```typescript
 // Invalid email format
 await table.add([{ email: 'invalid' }]);
@@ -339,10 +356,12 @@ await table.add([{ discount: 1.5 }]);
 **Feature**: Dependency injection via factory interfaces enables easy testing and flexible instantiation.
 
 **Key Interfaces**:
+
 - `AppSheetClientFactoryInterface`: Creates client instances
 - `DynamicTableFactoryInterface`: Creates table instances
 
 **Production vs Test**:
+
 ```typescript
 // Production: Use AppSheetClientFactory
 const prodFactory = new AppSheetClientFactory();
@@ -354,6 +373,7 @@ const testDb = new SchemaManager(testFactory, schema);
 ```
 
 **Benefits**:
+
 - Easy unit testing without mocking complex dependencies
 - No need to mock axios or network calls
 - Test data can be pre-seeded via MockDataProvider
@@ -362,6 +382,7 @@ const testDb = new SchemaManager(testFactory, schema);
 ### Error Handling
 
 All errors extend `AppSheetError` with specific subtypes:
+
 - `AuthenticationError` (401/403)
 - `ValidationError` (400) - Now includes field-level validation errors
 - `NotFoundError` (404)
@@ -374,11 +395,15 @@ Retry logic applies to network errors and 5xx server errors (max 3 attempts by d
 
 **Action Types**: Add, Find, Edit (not Update), Delete
 
-**Selectors**: AppSheet filter expressions use bracket notation:
-- `[FieldName] = "value"`
-- `[Status] = "Active" AND [Date] > "2025-01-01"`
+**Selectors**: AppSheet API requires selector expressions to use function wrappers. The `AppSheetClient` automatically wraps raw boolean expressions via `SelectorBuilder.ensureFunction()`:
+
+- Raw input: `[FieldName] = "value"` is sent as `Filter(tableName, [FieldName] = "value")`
+- Already wrapped expressions (Filter, Select, OrderBy, Top) pass through unchanged (idempotent)
+- Use `SelectorBuilder.buildFilter()` for injection-safe selectors from user input
+- Use `SelectorBuilder.escapeValue()` to escape values in manually built expressions
 
 **Request Structure**:
+
 ```json
 {
   "Action": "Find",
@@ -388,6 +413,7 @@ Retry logic applies to network errors and 5xx server errors (max 3 attempts by d
 ```
 
 **Response Structure** (handled automatically by client):
+
 ```json
 // Standard format
 {
@@ -408,27 +434,32 @@ Retry logic applies to network errors and 5xx server errors (max 3 attempts by d
 ### v3.0.0 Breaking Changes
 
 **AppSheetClient**:
+
 - ❌ Old: `new AppSheetClient({ appId, applicationAccessKey, runAsUserEmail? })`
 - ✅ New: `new AppSheetClient(connectionDef, runAsUserEmail)`
 - ❌ `getConfig()` removed - use `getTable()` instead
 
 **ConnectionManager**:
+
 - ❌ Old: `new ConnectionManager()` + `register()` + `get(name, userEmail?)`
 - ✅ New: `new ConnectionManager(clientFactory, schema)` + `get(name, userEmail)`
 - ❌ `register()`, `remove()`, `clear()`, `ping()`, `healthCheck()` removed
 - ✅ `list()` and `has()` added for introspection
 
 **SchemaManager**:
+
 - ❌ Old: `new SchemaManager(schema)` + `table(conn, table, userEmail?)`
 - ✅ New: `new SchemaManager(clientFactory, schema)` + `table(conn, table, userEmail)`
 - ❌ `getConnectionManager()` and `reload()` removed
 - ✅ `hasConnection()` and `hasTable()` added
 
 **MockAppSheetClient**:
+
 - ❌ Old: `new MockAppSheetClient({ appId, applicationAccessKey })`
 - ✅ New: `new MockAppSheetClient(connectionDef, runAsUserEmail, dataProvider?)`
 
 ### v3.0.0 Migration Example
+
 ```typescript
 // ❌ Old (v2.x)
 const client = new AppSheetClient({
@@ -451,6 +482,7 @@ const table = db.table('conn', 'tableName', 'user@example.com');  // required us
 ## Breaking Changes (v2.0.0)
 
 ### v2.0.0 Schema Changes
+
 - ❌ Old generic types (`'string'`, `'number'`, etc.) no longer supported
 - ❌ Shorthand string format (`"email": "string"`) no longer supported
 - ❌ `enum` property renamed to `allowedValues`
@@ -460,6 +492,7 @@ const table = db.table('conn', 'tableName', 'user@example.com');  // required us
 ## Documentation
 
 All public APIs use TSDoc comments with:
+
 - `@param` for parameters
 - `@returns` for return values
 - `@throws` for error conditions
@@ -537,12 +570,14 @@ const users = await table.findAll();  // Returns pre-seeded data
 ```
 
 ### MockAppSheetClient
+
 - In-memory mock implementation of `AppSheetClientInterface`
 - **v3.0.0 Constructor**: `new MockAppSheetClient(connectionDef, runAsUserEmail, dataProvider?)`
 - Stores data in memory without making API calls
 - Fully tested with comprehensive test suite
 
 ### Test Configuration
+
 - Tests use Jest with ts-jest preset
 - Test files located in `tests/` directory (separate from `src/`)
 - Test structure mirrors `src/` directory structure
@@ -552,6 +587,7 @@ const users = await table.findAll();  // Returns pre-seeded data
 - Import paths from tests: `import { X } from '../../src/module/X'`
 
 ### Test Files
+
 - `tests/client/AppSheetClient.test.ts` - Tests for real AppSheet client
 - `tests/client/MockAppSheetClient.test.ts` - Tests for mock client implementation
 
@@ -561,7 +597,7 @@ const users = await table.findAll();  // Returns pre-seeded data
 - CLI binary entry point: `dist/cli/index.js` (automatically made executable by npm)
 - CLI binary command: `appsheet` (can be run via `npx appsheet` after installation)
 - Schema files support environment variable substitution with `${VAR_NAME}` syntax
-- SchemaInspector's `toSchemaName()` method removes "extract_" prefix and adds "s" suffix
+- SchemaInspector's `toSchemaName()` method removes "extract\_" prefix and adds "s" suffix
 - Multi-instance support allows one MCP server to access multiple AppSheet apps
 - Runtime validation in DynamicTable checks types but doesn't prevent API calls for performance
 - The library is designed to be installed from GitHub via npm (not published to npm registry yet)

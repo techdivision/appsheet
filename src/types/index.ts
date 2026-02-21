@@ -25,3 +25,6 @@ export * from './mock';
 
 // Factory interfaces (v3.0.0)
 export * from './factories';
+
+// Selector builder interface
+export * from './selector';

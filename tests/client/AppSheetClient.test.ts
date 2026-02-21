@@ -426,7 +426,7 @@ describe('AppSheetClient - runAsUserEmail', () => {
         expect.objectContaining({
           Properties: expect.objectContaining({
             RunAsUserEmail: 'finder@example.com',
-            Selector: '[Status] = "Active"',
+            Selector: 'Filter(Users, [Status] = "Active")',
           }),
         })
       );
@@ -535,7 +535,7 @@ describe('AppSheetClient - runAsUserEmail', () => {
         expect.objectContaining({
           Properties: expect.objectContaining({
             RunAsUserEmail: 'reader@example.com',
-            Selector: '[Email] = "john@example.com"',
+            Selector: 'Filter(Users, [Email] = "john@example.com")',
           }),
         })
       );

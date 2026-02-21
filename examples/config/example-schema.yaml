@@ -1,29 +1,86 @@
-# Example AppSheet schema configuration
+# Example AppSheet schema configuration (v2.0.0+ format)
+#
+# All fields must use AppSheet-specific types with FieldDefinition objects.
+# Environment variables are resolved at runtime via ${VAR_NAME} syntax.
 
 connections:
   worklog:
     appId: ${APPSHEET_WORKLOG_APP_ID}
     applicationAccessKey: ${APPSHEET_WORKLOG_ACCESS_KEY}
     tables:
+      users:
+        tableName: extract_user
+        keyField: id
+        fields:
+          id:
+            type: Text
+            required: true
+          name:
+            type: Name
+            required: true
+          email:
+            type: Email
+            required: true
+          status:
+            type: Enum
+            required: true
+            allowedValues:
+              - Active
+              - Inactive
+              - Pending
+          role:
+            type: Enum
+            allowedValues:
+              - admin
+              - user
+          phone:
+            type: Phone
+          website:
+            type: URL
+          hireDate:
+            type: Date
+
       worklogs:
         tableName: worklog
         keyField: id
         fields:
-          id: string
-          userId: string
-          date: string
-          hours: number
-          description: string
-          projectKey: string
+          id:
+            type: Text
+            required: true
+          userId:
+            type: Text
+            required: true
+          date:
+            type: Date
+            required: true
+          hours:
+            type: Decimal
+            required: true
+          description:
+            type: Text
+          projectKey:
+            type: Text
+            required: true
 
       issues:
         tableName: extract_issue
         keyField: key
         fields:
-          key: string
-          summary: string
-          status: string
-          assignee: string
+          key:
+            type: Text
+            required: true
+          summary:
+            type: Text
+            required: true
+          status:
+            type: Enum
+            allowedValues:
+              - Open
+              - In Progress
+              - Done
+              - Closed
+          assignee:
+            type: Email
 
   hr:
     appId: ${APPSHEET_HR_APP_ID}
@@ -33,8 +90,21 @@ connections:
         tableName: employees
         keyField: id
         fields:
-          id: string
-          name: string
-          email: string
-          department: string
-          hireDate: date
+          id:
+            type: Text
+            required: true
+          name:
+            type: Name
+            required: true
+          email:
+            type: Email
+            required: true
+          department:
+            type: Enum
+            allowedValues:
+              - Engineering
+              - Sales
+              - HR
+              - Marketing
+          hireDate:
+            type: Date
