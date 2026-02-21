@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-02-21
+
+### Added
+
+- **SelectorBuilder Class with Interface** (SOSO-365)
+  - `SelectorBuilderInterface`: Contract for selector building and value escaping
+  - `SelectorBuilder`: Default implementation with 4 methods:
+    - `ensureFunction()`: Wraps raw boolean expressions in `Filter()` for API compliance
+    - `escapeValue()`: Escapes `"` and `\` to prevent injection attacks
+    - `buildFilter()`: Combines escaping with `Filter()` wrapping (convenience)
+    - `isSafeIdentifier()`: Validates table/field names for safe characters
+  - Comprehensive test suite with 40+ tests including injection attack prevention
+  - Integrated from `AppSheetFilterEscape` utility in `service_portfolio_mcp`
+
+- **DI-Compatible SelectorBuilder Injection (Option B)**
+  - `AppSheetClientFactory` accepts optional `SelectorBuilderInterface` in constructor
+  - `AppSheetClient` accepts optional `SelectorBuilderInterface` as 3rd constructor parameter
+  - Enables custom builder injection via tsyringe or other DI frameworks
+  - Enables AOP extensibility (e.g. `@LogExecution` via subclass)
+  - Default behavior unchanged (falls back to `new SelectorBuilder()`)
+  - `AppSheetClientFactoryInterface.create()` signature unchanged — no breaking change
+
+- **Bugfix Concept Document**
+  - `docs/SOSO-365/BUGFIX_CONCEPT.md` with design decisions, DI compatibility, and AOP extensibility
+
+### Fixed
+
+- **Selector Wrapping** (SOSO-365): `AppSheetClient.find()` now automatically wraps raw
+  boolean expressions in `Filter(tableName, expression)` as required by AppSheet API spec.
+  Previously raw expressions like `[Field] = "value"` were sent without wrapper.
+  Already-wrapped expressions (`Filter()`, `Select()`, `OrderBy()`, `Top()`) pass through
+  unchanged (idempotent).
+
+- **Default Base URL** (SOSO-365): Changed from deprecated `https://api.appsheet.com/api/v2`
+  to `https://www.appsheet.com/api/v2` per current AppSheet API documentation.
+  Regional endpoints (EU, Asia Pacific) continue to work via `baseUrl` override.
+
+### Technical Details
+
+- **Breaking Changes**: None
+- **SemVer Level**: MINOR (new features + bug fixes, fully backward compatible)
+- **Test Coverage**: 265 tests across 9 test suites
+- **Jira**: [SOSO-365](https://techdivision.atlassian.net/browse/SOSO-365)
+
 ## [3.0.0] - 2024-11-30
 
 ### Added
@@ -81,6 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 See [CLAUDE.md](./CLAUDE.md) Breaking Changes section for detailed migration examples.
 
 **Quick Migration:**
+
 ```typescript
 // Old (v2.x)
 const client = new AppSheetClient({ appId, applicationAccessKey, runAsUserEmail });
