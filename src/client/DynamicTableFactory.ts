@@ -8,7 +8,13 @@
  * @category Client
  */
 
-import { DynamicTableFactoryInterface, AppSheetClientFactoryInterface, SchemaConfig } from '../types';
+import {
+  DynamicTableFactoryInterface,
+  AppSheetClientFactoryInterface,
+  SchemaConfig,
+  UnknownFieldPolicyInterface,
+} from '../types';
+import { StripUnknownFieldPolicy } from '../utils/policies';
 import { DynamicTable } from './DynamicTable';
 
 /**
@@ -24,9 +30,12 @@ import { DynamicTable } from './DynamicTable';
  *
  * @example
  * ```typescript
- * // Create factory with client factory and schema
+ * // Create factory with client factory and schema (default: StripUnknownFieldPolicy)
  * const clientFactory = new AppSheetClientFactory();
  * const tableFactory = new DynamicTableFactory(clientFactory, schema);
+ *
+ * // Create factory with custom unknown field policy
+ * const strictFactory = new DynamicTableFactory(clientFactory, schema, new ErrorUnknownFieldPolicy());
  *
  * // Create table instances
  * const usersTable = tableFactory.create<User>('worklog', 'users', 'user@example.com');
@@ -39,16 +48,22 @@ import { DynamicTable } from './DynamicTable';
  * ```
  */
 export class DynamicTableFactory implements DynamicTableFactoryInterface {
+  private readonly unknownFieldPolicy: UnknownFieldPolicyInterface;
+
   /**
    * Creates a new DynamicTableFactory.
    *
    * @param clientFactory - Factory to create AppSheetClient instances
    * @param schema - Schema configuration with connection definitions
+   * @param unknownFieldPolicy - Optional policy for handling unknown fields in DynamicTable (default: StripUnknownFieldPolicy)
    */
   constructor(
     private readonly clientFactory: AppSheetClientFactoryInterface,
-    private readonly schema: SchemaConfig
-  ) {}
+    private readonly schema: SchemaConfig,
+    unknownFieldPolicy?: UnknownFieldPolicyInterface
+  ) {
+    this.unknownFieldPolicy = unknownFieldPolicy ?? new StripUnknownFieldPolicy();
+  }
 
   /**
    * Create a DynamicTable instance for a specific connection and table.
@@ -75,7 +90,9 @@ export class DynamicTableFactory implements DynamicTableFactoryInterface {
     const connectionDef = this.schema.connections[connectionName];
     if (!connectionDef) {
       const available = Object.keys(this.schema.connections).join(', ') || 'none';
-      throw new Error(`Connection "${connectionName}" not found. Available connections: ${available}`);
+      throw new Error(
+        `Connection "${connectionName}" not found. Available connections: ${available}`
+      );
     }
 
     // Create client using factory
@@ -84,7 +101,7 @@ export class DynamicTableFactory implements DynamicTableFactoryInterface {
     // Get table definition (will throw if not found)
     const tableDef = client.getTable(tableName);
 
-    // Create and return DynamicTable
-    return new DynamicTable<T>(client, tableDef);
+    // Create and return DynamicTable with injected policy
+    return new DynamicTable<T>(client, tableDef, this.unknownFieldPolicy);
   }
 }

@@ -28,3 +28,6 @@ export * from './factories';
 
 // Selector builder interface
 export * from './selector';
+
+// Policy interfaces
+export * from './policies';

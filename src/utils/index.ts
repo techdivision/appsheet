@@ -7,3 +7,4 @@ export * from './SchemaLoader';
 export * from './SchemaManager';
 export * from './validators';
 export * from './SelectorBuilder';
+export * from './policies';
