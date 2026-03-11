@@ -689,7 +689,10 @@ describe('MockAppSheetClient', () => {
     it('should delete multiple rows', async () => {
       const result = await client.delete<User>({
         tableName: 'users',
-        rows: [{ id: '1', name: '' }, { id: '2', name: '' }],
+        rows: [
+          { id: '1', name: '' },
+          { id: '2', name: '' },
+        ],
       });
 
       expect(result.success).toBe(true);
@@ -968,6 +971,209 @@ describe('MockAppSheetClient', () => {
       expect(() => emptyClient.getTable('anything')).toThrow(
         'Table "anything" not found. Available tables: none'
       );
+    });
+  });
+
+  /**
+   * Test Suite: getKeyField() Schema-Lookup (SOSO-434)
+   *
+   * Verifies that getKeyField() resolves key fields from the ConnectionDefinition
+   * schema instead of using a hardcoded map. This is critical because:
+   *
+   * - connectionDef.tables is indexed by **schema names** (e.g. 'solutions')
+   * - getKeyField() receives the **real AppSheet table name** (e.g. 'solution')
+   * - The lookup must iterate Object.values and match by tableDef.tableName
+   *
+   * Uses a dedicated ConnectionDefinition where schema keys differ from
+   * AppSheet table names to properly test the lookup logic.
+   *
+   * @see https://github.com/techdivision/appsheet/issues/10
+   * @see https://techdivision.atlassian.net/browse/SOSO-434
+   */
+  describe('getKeyField() Schema-Lookup (SOSO-434)', () => {
+    /**
+     * ConnectionDefinition where schema keys deliberately differ from
+     * AppSheet table names to expose the schema-key vs table-name distinction.
+     */
+    const schemaLookupConnDef: ConnectionDefinition = {
+      appId: 'test-app',
+      applicationAccessKey: 'test-key',
+      tables: {
+        // Schema key 'services' ≠ AppSheet table name 'service_portfolio'
+        services: {
+          tableName: 'service_portfolio',
+          keyField: 'service_portfolio_id',
+          fields: {
+            service_portfolio_id: { type: 'Text', required: true },
+            name: { type: 'Text', required: true },
+          },
+        },
+        // Schema key 'solutions' ≠ AppSheet table name 'solution'
+        solutions: {
+          tableName: 'solution',
+          keyField: 'solution_id',
+          fields: {
+            solution_id: { type: 'Text', required: true },
+            title: { type: 'Text', required: true },
+          },
+        },
+        // Schema key 'industries' ≠ AppSheet table name 'industry'
+        industries: {
+          tableName: 'industry',
+          keyField: 'industry_id',
+          fields: {
+            industry_id: { type: 'Text', required: true },
+            name: { type: 'Text', required: true },
+          },
+        },
+        // Schema key 'areas' ≠ AppSheet table name 'area'
+        areas: {
+          tableName: 'area',
+          keyField: 'area_id',
+          fields: {
+            area_id: { type: 'Text', required: true },
+            name: { type: 'Text', required: true },
+          },
+        },
+        // Schema key 'categories' ≠ AppSheet table name 'category'
+        categories: {
+          tableName: 'category',
+          keyField: 'category_id',
+          fields: {
+            category_id: { type: 'Text', required: true },
+            name: { type: 'Text', required: true },
+          },
+        },
+        // Schema key 'icp' ≠ AppSheet table name 'ideal_customer_profile'
+        icp: {
+          tableName: 'ideal_customer_profile',
+          keyField: 'ideal_customer_profile_id',
+          fields: {
+            ideal_customer_profile_id: { type: 'Text', required: true },
+            name: { type: 'Text', required: true },
+          },
+        },
+      },
+    };
+
+    let schemaClient: MockAppSheetClient;
+
+    beforeEach(() => {
+      schemaClient = new MockAppSheetClient(schemaLookupConnDef, 'test@example.com');
+    });
+
+    /**
+     * Test: Resolve keyField via tableDef.tableName lookup
+     *
+     * getKeyField('solution') must find the 'solutions' entry
+     * by matching tableDef.tableName === 'solution', then return 'solution_id'.
+     */
+    it('should resolve keyField via tableDef.tableName lookup (not schema key)', async () => {
+      // These tables were NOT in the old hardcoded map → would have returned 'id'
+      const row1 = await schemaClient.addOne('solution', { solution_id: 's1', title: 'Test' });
+      expect(row1).toHaveProperty('solution_id', 's1');
+
+      const row2 = await schemaClient.addOne('industry', { industry_id: 'i1', name: 'Tech' });
+      expect(row2).toHaveProperty('industry_id', 'i1');
+
+      const row3 = await schemaClient.addOne('ideal_customer_profile', {
+        ideal_customer_profile_id: 'icp1',
+        name: 'Enterprise',
+      });
+      expect(row3).toHaveProperty('ideal_customer_profile_id', 'icp1');
+    });
+
+    /**
+     * Test: Backward compatibility — tables that were in the old hardcoded map
+     *
+     * service_portfolio, area, category must still work correctly.
+     */
+    it('should work for tables that were already in the old hardcoded map', async () => {
+      const svc = await schemaClient.addOne('service_portfolio', {
+        service_portfolio_id: 'sp1',
+        name: 'Service',
+      });
+      expect(svc).toHaveProperty('service_portfolio_id', 'sp1');
+
+      const area = await schemaClient.addOne('area', { area_id: 'a1', name: 'Area' });
+      expect(area).toHaveProperty('area_id', 'a1');
+
+      const cat = await schemaClient.addOne('category', { category_id: 'c1', name: 'Cat' });
+      expect(cat).toHaveProperty('category_id', 'c1');
+    });
+
+    /**
+     * Test: Convention-based fallback for tables not in connectionDef
+     *
+     * Tables not defined in the schema should fall back to ${tableName}_id.
+     */
+    it('should use convention-based fallback for tables not in connectionDef', async () => {
+      const row = await schemaClient.addOne('unknown_table', {
+        unknown_table_id: 'u1',
+        data: 'test',
+      });
+      expect(row).toHaveProperty('unknown_table_id', 'u1');
+    });
+
+    /**
+     * Test: Must NOT match by schema key name
+     *
+     * 'solutions' is the schema key, NOT the AppSheet table name.
+     * getKeyField('solutions') should NOT find 'solution_id'.
+     * Instead, it should fall back to convention: 'solutions_id'.
+     */
+    it('should NOT match by schema key name', async () => {
+      // 'solutions' is the schema key, but the real table name is 'solution'
+      // getKeyField('solutions') should NOT return 'solution_id'
+      // It falls back to convention: 'solutions_id'
+      const row = await schemaClient.addOne('solutions', {
+        solutions_id: 'fake1',
+        title: 'Wrong lookup',
+      });
+      expect(row).toHaveProperty('solutions_id', 'fake1');
+    });
+
+    /**
+     * Test: CRUD operations use correct keyField from schema
+     *
+     * Verifies that update and delete operations correctly resolve
+     * the keyField for tables where schema key ≠ table name.
+     */
+    it('should use schema-resolved keyField for update operations', async () => {
+      await schemaClient.addOne('solution', { solution_id: 's1', title: 'Original' });
+
+      const updated = await schemaClient.updateOne('solution', {
+        solution_id: 's1',
+        title: 'Updated',
+      });
+      expect(updated.title).toBe('Updated');
+    });
+
+    it('should use schema-resolved keyField for delete operations', async () => {
+      await schemaClient.addOne('solution', { solution_id: 's1', title: 'ToDelete' });
+
+      const result = await schemaClient.deleteOne('solution', { solution_id: 's1' });
+      expect(result).toBe(true);
+
+      const remaining = await schemaClient.findAll('solution');
+      expect(remaining).toHaveLength(0);
+    });
+
+    /**
+     * Test: Throw ValidationError when key field is missing (schema-resolved)
+     *
+     * The resolved keyField 'solution_id' should be required for updates.
+     */
+    it('should throw ValidationError when schema-resolved key field is missing', async () => {
+      await schemaClient.addOne('solution', { solution_id: 's1', title: 'Test' });
+
+      // Try to update without the correct key field
+      await expect(
+        schemaClient.update({
+          tableName: 'solution',
+          rows: [{ solution_id: '', title: 'Updated' }],
+        })
+      ).rejects.toThrow(ValidationError);
     });
   });
 
