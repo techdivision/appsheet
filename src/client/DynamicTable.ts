@@ -4,8 +4,9 @@
  * @category Client
  */
 
-import { AppSheetClientInterface, TableDefinition } from '../types';
+import { AppSheetClientInterface, TableDefinition, UnknownFieldPolicyInterface } from '../types';
 import { AppSheetTypeValidator } from '../utils/validators';
+import { StripUnknownFieldPolicy } from '../utils/policies';
 
 /**
  * Table client with schema-based operations and runtime validation.
@@ -34,10 +35,22 @@ import { AppSheetTypeValidator } from '../utils/validators';
  * ```
  */
 export class DynamicTable<T extends Record<string, any> = Record<string, any>> {
+  private readonly unknownFieldPolicy: UnknownFieldPolicyInterface;
+
+  /**
+   * Creates a new DynamicTable instance.
+   *
+   * @param client - AppSheet client for API operations
+   * @param definition - Table schema definition
+   * @param unknownFieldPolicy - Optional policy for handling unknown fields (default: StripUnknownFieldPolicy)
+   */
   constructor(
     private client: AppSheetClientInterface,
-    private definition: TableDefinition
-  ) {}
+    private definition: TableDefinition,
+    unknownFieldPolicy?: UnknownFieldPolicyInterface
+  ) {
+    this.unknownFieldPolicy = unknownFieldPolicy ?? new StripUnknownFieldPolicy();
+  }
 
   /**
    * Find all rows in the table.
@@ -145,12 +158,20 @@ export class DynamicTable<T extends Record<string, any> = Record<string, any>> {
    * ```
    */
   async add(rows: Partial<T>[]): Promise<T[]> {
+    // Apply unknown field policy before validation
+    const knownFields = Object.keys(this.definition.fields);
+    const processedRows = this.unknownFieldPolicy.apply<T>(
+      this.definition.tableName,
+      rows,
+      knownFields
+    );
+
     // Validate rows
-    this.validateRows(rows);
+    this.validateRows(processedRows);
 
     const result = await this.client.add<T>({
       tableName: this.definition.tableName,
-      rows: rows as T[],
+      rows: processedRows as T[],
     });
     return result.rows;
   }
@@ -180,12 +201,20 @@ export class DynamicTable<T extends Record<string, any> = Record<string, any>> {
    * ```
    */
   async update(rows: Partial<T>[]): Promise<T[]> {
+    // Apply unknown field policy before validation
+    const knownFields = Object.keys(this.definition.fields);
+    const processedRows = this.unknownFieldPolicy.apply<T>(
+      this.definition.tableName,
+      rows,
+      knownFields
+    );
+
     // Validate rows
-    this.validateRows(rows, false);
+    this.validateRows(processedRows, false);
 
     const result = await this.client.update<T>({
       tableName: this.definition.tableName,
-      rows: rows as T[],
+      rows: processedRows as T[],
     });
     return result.rows;
   }
@@ -214,9 +243,17 @@ export class DynamicTable<T extends Record<string, any> = Record<string, any>> {
    * ```
    */
   async delete(keys: Partial<T>[]): Promise<boolean> {
+    // Apply unknown field policy to delete keys too
+    const knownFields = Object.keys(this.definition.fields);
+    const processedKeys = this.unknownFieldPolicy.apply<T>(
+      this.definition.tableName,
+      keys,
+      knownFields
+    );
+
     await this.client.delete({
       tableName: this.definition.tableName,
-      rows: keys,
+      rows: processedKeys,
     });
     return true;
   }
@@ -315,10 +352,15 @@ export class DynamicTable<T extends Record<string, any> = Record<string, any>> {
 
         // Enum/EnumList validation
         if (fieldDef.allowedValues) {
-          AppSheetTypeValidator.validateEnum(fieldName, fieldType, fieldDef.allowedValues, value, i);
+          AppSheetTypeValidator.validateEnum(
+            fieldName,
+            fieldType,
+            fieldDef.allowedValues,
+            value,
+            i
+          );
         }
       }
     }
   }
-
 }
