@@ -93,7 +93,11 @@ export class MockAppSheetClient implements AppSheetClientInterface {
    * const client = new MockAppSheetClient(connectionDef, 'test@example.com', mockData);
    * ```
    */
-  constructor(connectionDef: ConnectionDefinition, runAsUserEmail: string, dataProvider?: MockDataProvider) {
+  constructor(
+    connectionDef: ConnectionDefinition,
+    runAsUserEmail: string,
+    dataProvider?: MockDataProvider
+  ) {
     this.connectionDef = connectionDef;
     this.runAsUserEmail = runAsUserEmail;
     this.database = new MockDatabase();
@@ -154,7 +158,9 @@ export class MockAppSheetClient implements AppSheetClientInterface {
   /**
    * Add (Create) one or more rows to a table.
    */
-  async add<T extends Record<string, any> = Record<string, any>>(options: AddOptions<T>): Promise<AddResponse<T>> {
+  async add<T extends Record<string, any> = Record<string, any>>(
+    options: AddOptions<T>
+  ): Promise<AddResponse<T>> {
     const createdRows: T[] = [];
 
     for (const row of options.rows) {
@@ -164,8 +170,7 @@ export class MockAppSheetClient implements AppSheetClientInterface {
         ...row,
         [keyField]: (row as any)[keyField] || uuidv4(),
         created_at: new Date().toISOString(),
-        created_by:
-          options.properties?.RunAsUserEmail || this.runAsUserEmail,
+        created_by: options.properties?.RunAsUserEmail || this.runAsUserEmail,
       } as T;
 
       const created = this.database.insert(options.tableName, rowWithId, keyField);
@@ -181,7 +186,9 @@ export class MockAppSheetClient implements AppSheetClientInterface {
   /**
    * Find (Read) rows from a table with optional filtering.
    */
-  async find<T extends Record<string, any> = Record<string, any>>(options: FindOptions): Promise<FindResponse<T>> {
+  async find<T extends Record<string, any> = Record<string, any>>(
+    options: FindOptions
+  ): Promise<FindResponse<T>> {
     let rows = this.database.findAll<T>(options.tableName);
 
     // Apply selector filter if provided
@@ -198,24 +205,25 @@ export class MockAppSheetClient implements AppSheetClientInterface {
   /**
    * Update (Edit) one or more rows in a table.
    */
-  async update<T extends Record<string, any> = Record<string, any>>(options: UpdateOptions<T>): Promise<UpdateResponse<T>> {
+  async update<T extends Record<string, any> = Record<string, any>>(
+    options: UpdateOptions<T>
+  ): Promise<UpdateResponse<T>> {
     const updatedRows: T[] = [];
     const keyField = this.getKeyField(options.tableName);
 
     for (const row of options.rows) {
       const keyValue = (row as any)[keyField];
       if (!keyValue) {
-        throw new ValidationError(
-          `Row is missing key field "${keyField}"`,
-          { field: keyField, tableName: options.tableName }
-        );
+        throw new ValidationError(`Row is missing key field "${keyField}"`, {
+          field: keyField,
+          tableName: options.tableName,
+        });
       }
 
       const updated = this.database.update<T>(options.tableName, keyValue, {
         ...row,
         modified_at: new Date().toISOString(),
-        modified_by:
-          options.properties?.RunAsUserEmail || this.runAsUserEmail,
+        modified_by: options.properties?.RunAsUserEmail || this.runAsUserEmail,
       } as Partial<T>);
 
       if (!updated) {
@@ -237,17 +245,19 @@ export class MockAppSheetClient implements AppSheetClientInterface {
   /**
    * Delete one or more rows from a table.
    */
-  async delete<T extends Record<string, any> = Record<string, any>>(options: DeleteOptions<T>): Promise<DeleteResponse> {
+  async delete<T extends Record<string, any> = Record<string, any>>(
+    options: DeleteOptions<T>
+  ): Promise<DeleteResponse> {
     const keyField = this.getKeyField(options.tableName);
     let deletedCount = 0;
 
     for (const row of options.rows) {
       const keyValue = (row as any)[keyField];
       if (!keyValue) {
-        throw new ValidationError(
-          `Row is missing key field "${keyField}"`,
-          { field: keyField, tableName: options.tableName }
-        );
+        throw new ValidationError(`Row is missing key field "${keyField}"`, {
+          field: keyField,
+          tableName: options.tableName,
+        });
       }
 
       const deleted = this.database.delete(options.tableName, keyValue);
@@ -266,7 +276,9 @@ export class MockAppSheetClient implements AppSheetClientInterface {
   /**
    * Convenience method to find all rows in a table.
    */
-  async findAll<T extends Record<string, any> = Record<string, any>>(tableName: string): Promise<T[]> {
+  async findAll<T extends Record<string, any> = Record<string, any>>(
+    tableName: string
+  ): Promise<T[]> {
     const response = await this.find<T>({ tableName });
     return response.rows;
   }
@@ -285,7 +297,10 @@ export class MockAppSheetClient implements AppSheetClientInterface {
   /**
    * Convenience method to add a single row to a table.
    */
-  async addOne<T extends Record<string, any> = Record<string, any>>(tableName: string, row: T): Promise<T> {
+  async addOne<T extends Record<string, any> = Record<string, any>>(
+    tableName: string,
+    row: T
+  ): Promise<T> {
     const response = await this.add<T>({ tableName, rows: [row] });
     return response.rows[0];
   }
@@ -293,7 +308,10 @@ export class MockAppSheetClient implements AppSheetClientInterface {
   /**
    * Convenience method to update a single row in a table.
    */
-  async updateOne<T extends Record<string, any> = Record<string, any>>(tableName: string, row: T): Promise<T> {
+  async updateOne<T extends Record<string, any> = Record<string, any>>(
+    tableName: string,
+    row: T
+  ): Promise<T> {
     const response = await this.update<T>({ tableName, rows: [row] });
     return response.rows[0];
   }
@@ -301,7 +319,10 @@ export class MockAppSheetClient implements AppSheetClientInterface {
   /**
    * Convenience method to delete a single row from a table.
    */
-  async deleteOne<T extends Record<string, any> = Record<string, any>>(tableName: string, row: T): Promise<boolean> {
+  async deleteOne<T extends Record<string, any> = Record<string, any>>(
+    tableName: string,
+    row: T
+  ): Promise<boolean> {
     await this.delete<T>({ tableName, rows: [row] });
     return true;
   }
@@ -348,18 +369,29 @@ export class MockAppSheetClient implements AppSheetClientInterface {
   }
 
   /**
-   * Get the key field for a table.
+   * Get the key field for a table by looking up the ConnectionDefinition.
    *
-   * Maps table names to their primary key fields.
+   * Searches through `connectionDef.tables` (indexed by schema names like 'solutions')
+   * to find the entry whose `tableDef.tableName` matches the given AppSheet table name
+   * (e.g. 'solution'). Returns the `keyField` from the matching TableDefinition.
+   *
+   * Falls back to convention-based naming (`${tableName}_id`) if the table is not
+   * found in the ConnectionDefinition.
+   *
+   * @param tableName - The real AppSheet table name (not the schema key name)
+   * @returns The key field name for the table
    */
   private getKeyField(tableName: string): string {
-    const keyFieldMap: Record<string, string> = {
-      service_portfolio: 'service_portfolio_id',
-      area: 'area_id',
-      category: 'category_id',
-    };
+    // Schema-Lookup: iterate connectionDef.tables (indexed by schema names)
+    // and match by tableDef.tableName (the real AppSheet table name)
+    for (const tableDef of Object.values(this.connectionDef.tables)) {
+      if (tableDef.tableName === tableName) {
+        return tableDef.keyField;
+      }
+    }
 
-    return keyFieldMap[tableName] || 'id';
+    // Convention-based fallback for tables not in connectionDef
+    return `${tableName}_id`;
   }
 
   /**
@@ -390,9 +422,7 @@ export class MockAppSheetClient implements AppSheetClientInterface {
 
     if (inMatch) {
       const [, field, valuesStr] = inMatch;
-      const values = valuesStr
-        .split(',')
-        .map((v) => v.trim().replace(/["']/g, ''));
+      const values = valuesStr.split(',').map((v) => v.trim().replace(/["']/g, ''));
 
       return rows.filter((row) => values.includes((row as any)[field]));
     }
