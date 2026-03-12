@@ -113,9 +113,7 @@ describe('DynamicTable - AppSheet Field Types', () => {
     it('should reject invalid URLs', async () => {
       const table = new DynamicTable(mockClient, tableDef);
 
-      await expect(table.add([{ id: '1', website: 'not-a-url' }])).rejects.toThrow(
-        ValidationError
-      );
+      await expect(table.add([{ id: '1', website: 'not-a-url' }])).rejects.toThrow(ValidationError);
 
       await expect(table.add([{ id: '1', website: 'example.com' }])).rejects.toThrow(
         ValidationError
@@ -192,9 +190,7 @@ describe('DynamicTable - AppSheet Field Types', () => {
 
       await expect(table.add([{ id: '1', status: 'Unknown' }])).rejects.toThrow(ValidationError);
 
-      await expect(table.add([{ id: '1', status: 'active' }])).rejects.toThrow(
-        ValidationError
-      ); // Case sensitive
+      await expect(table.add([{ id: '1', status: 'active' }])).rejects.toThrow(ValidationError); // Case sensitive
     });
 
     it('should include allowed values in error message', async () => {
@@ -344,19 +340,35 @@ describe('DynamicTable - AppSheet Field Types', () => {
     it('should accept Date objects', async () => {
       const table = new DynamicTable(mockClient, tableDef);
 
-      await expect(table.add([{ id: '1', eventDate: new Date('2025-11-20') }])).resolves.not.toThrow();
+      await expect(
+        table.add([{ id: '1', eventDate: new Date('2025-11-20') }])
+      ).resolves.not.toThrow();
     });
 
-    it('should reject invalid date formats', async () => {
+    it('should accept locale-formatted dates in permissive mode (no locale set)', async () => {
       const table = new DynamicTable(mockClient, tableDef);
 
-      await expect(table.add([{ id: '1', eventDate: '11/20/2025' }])).rejects.toThrow(
+      // Without locale, permissive mode accepts any plausible date format
+      await expect(table.add([{ id: '1', eventDate: '11/20/2025' }])).resolves.not.toThrow();
+      await expect(table.add([{ id: '2', eventDate: '20.11.2025' }])).resolves.not.toThrow();
+    });
+
+    it('should reject obviously invalid date strings', async () => {
+      const table = new DynamicTable(mockClient, tableDef);
+
+      await expect(table.add([{ id: '1', eventDate: 'not-a-date' }])).rejects.toThrow(
         ValidationError
       );
+    });
 
+    it('should still reject ISO datetime for Date field in permissive mode', async () => {
+      const table = new DynamicTable(mockClient, tableDef);
+
+      // ISO datetime with T is not a valid Date (should use DateTime type)
+      // This still fails because permissive mode checks for 3 numeric parts separated by /.-
       await expect(table.add([{ id: '1', eventDate: '2025-11-20T10:00:00Z' }])).rejects.toThrow(
         ValidationError
-      ); // Should use DateTime type
+      );
     });
   });
 
@@ -544,9 +556,7 @@ describe('DynamicTable - AppSheet Field Types', () => {
 
       await expect(table.update([{ id: '1', status: 'Active' }])).resolves.not.toThrow();
 
-      await expect(table.update([{ id: '1', status: 'Unknown' }])).rejects.toThrow(
-        ValidationError
-      );
+      await expect(table.update([{ id: '1', status: 'Unknown' }])).rejects.toThrow(ValidationError);
     });
   });
 
@@ -869,7 +879,9 @@ describe('DynamicTable - AppSheet Field Types', () => {
 
       // Invalid email
       try {
-        await table.add([{ id: '1', email: 'bad-email', phone: '+1234567890', website: 'https://example.com' }]);
+        await table.add([
+          { id: '1', email: 'bad-email', phone: '+1234567890', website: 'https://example.com' },
+        ]);
         fail('Should have thrown ValidationError');
       } catch (error: any) {
         expect(error).toBeInstanceOf(ValidationError);
@@ -879,7 +891,9 @@ describe('DynamicTable - AppSheet Field Types', () => {
 
       // Invalid phone
       try {
-        await table.add([{ id: '1', email: 'user@example.com', phone: 'abc', website: 'https://example.com' }]);
+        await table.add([
+          { id: '1', email: 'user@example.com', phone: 'abc', website: 'https://example.com' },
+        ]);
         fail('Should have thrown ValidationError');
       } catch (error: any) {
         expect(error).toBeInstanceOf(ValidationError);
@@ -888,7 +902,9 @@ describe('DynamicTable - AppSheet Field Types', () => {
 
       // Invalid URL
       try {
-        await table.add([{ id: '1', email: 'user@example.com', phone: '+1234567890', website: 'not-a-url' }]);
+        await table.add([
+          { id: '1', email: 'user@example.com', phone: '+1234567890', website: 'not-a-url' },
+        ]);
         fail('Should have thrown ValidationError');
       } catch (error: any) {
         expect(error).toBeInstanceOf(ValidationError);

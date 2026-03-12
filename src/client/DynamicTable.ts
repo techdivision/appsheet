@@ -172,6 +172,7 @@ export class DynamicTable<T extends Record<string, any> = Record<string, any>> {
     const result = await this.client.add<T>({
       tableName: this.definition.tableName,
       rows: processedRows as T[],
+      properties: this.definition.locale ? { Locale: this.definition.locale } : undefined,
     });
     return result.rows;
   }
@@ -215,6 +216,7 @@ export class DynamicTable<T extends Record<string, any> = Record<string, any>> {
     const result = await this.client.update<T>({
       tableName: this.definition.tableName,
       rows: processedRows as T[],
+      properties: this.definition.locale ? { Locale: this.definition.locale } : undefined,
     });
     return result.rows;
   }
@@ -347,8 +349,8 @@ export class DynamicTable<T extends Record<string, any> = Record<string, any>> {
           continue;
         }
 
-        // Type validation using AppSheetTypeValidator
-        AppSheetTypeValidator.validate(fieldName, fieldType, value, i);
+        // Type validation using AppSheetTypeValidator (with locale for date/datetime)
+        AppSheetTypeValidator.validate(fieldName, fieldType, value, i, this.definition.locale);
 
         // Enum/EnumList validation
         if (fieldDef.allowedValues) {

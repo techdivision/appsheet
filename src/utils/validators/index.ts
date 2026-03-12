@@ -5,5 +5,6 @@
  */
 
 export { BaseTypeValidator } from './BaseTypeValidator';
-export { FormatValidator } from './FormatValidator';
+export { FormatValidator, getLocaleDateFormat } from './FormatValidator';
+export type { DateFormatInfo } from './FormatValidator';
 export { AppSheetTypeValidator } from './AppSheetTypeValidator';

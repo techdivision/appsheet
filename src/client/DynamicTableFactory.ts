@@ -101,7 +101,12 @@ export class DynamicTableFactory implements DynamicTableFactoryInterface {
     // Get table definition (will throw if not found)
     const tableDef = client.getTable(tableName);
 
+    // Resolve locale cascade: table locale > connection locale > undefined
+    const effectiveLocale = tableDef.locale ?? connectionDef.locale ?? undefined;
+    const resolvedTableDef =
+      effectiveLocale !== tableDef.locale ? { ...tableDef, locale: effectiveLocale } : tableDef;
+
     // Create and return DynamicTable with injected policy
-    return new DynamicTable<T>(client, tableDef, this.unknownFieldPolicy);
+    return new DynamicTable<T>(client, resolvedTableDef, this.unknownFieldPolicy);
   }
 }

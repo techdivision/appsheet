@@ -135,6 +135,21 @@ export interface TableDefinition {
   /** Name of the key/primary field */
   keyField: string;
 
+  /**
+   * Optional locale for date/datetime format validation (BCP 47 language tag).
+   *
+   * Controls which date format the validator accepts and which `Properties.Locale`
+   * is sent to the AppSheet API. When set, the validator uses `Intl.DateTimeFormat`
+   * to dynamically determine the expected format for the locale.
+   *
+   * Locale cascade: Table locale > Connection locale > undefined (permissive mode).
+   *
+   * @example 'de-DE' // accepts DD.MM.YYYY
+   * @example 'en-US' // accepts MM/DD/YYYY
+   * @example 'ja-JP' // accepts YYYY/MM/DD
+   */
+  locale?: string;
+
   /** Field definitions (name -> FieldDefinition object only) */
   fields: Record<string, FieldDefinition>;
 }
@@ -157,6 +172,18 @@ export interface ConnectionDefinition {
 
   /** Optional global user email for all operations on this connection */
   runAsUserEmail?: string;
+
+  /**
+   * Optional default locale for all tables in this connection (BCP 47 language tag).
+   *
+   * Individual tables can override this with their own `locale` property.
+   * When neither table nor connection locale is set, date validation runs
+   * in permissive mode (accepts any plausible date format).
+   *
+   * @example 'de-DE'
+   * @example 'en-US'
+   */
+  locale?: string;
 
   /** Table definitions for this connection */
   tables: Record<string, TableDefinition>;
