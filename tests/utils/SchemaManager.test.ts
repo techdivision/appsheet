@@ -11,8 +11,8 @@
  */
 
 import { SchemaManager } from '../../src/utils/SchemaManager';
-import { SchemaConfig, MockDataProvider } from '../../src/types';
-import { DynamicTable, MockAppSheetClientFactory } from '../../src/client';
+import { SchemaConfig, MockDataProvider, DynamicTableFactoryInterface } from '../../src/types';
+import { DynamicTable, DynamicTableFactory, MockAppSheetClientFactory } from '../../src/client';
 
 describe('SchemaManager v3.0.0', () => {
   /**
@@ -92,9 +92,7 @@ describe('SchemaManager v3.0.0', () => {
         },
       };
 
-      expect(() => new SchemaManager(factory, invalidSchema)).toThrow(
-        /Invalid schema/
-      );
+      expect(() => new SchemaManager(factory, invalidSchema)).toThrow(/Invalid schema/);
     });
 
     it('should work with MockAppSheetClientFactory', () => {
@@ -102,6 +100,60 @@ describe('SchemaManager v3.0.0', () => {
       const manager = new SchemaManager(factory, baseSchema);
 
       expect(manager.getConnections()).toEqual(['test-conn', 'hr-conn']);
+    });
+
+    it('should accept optional tableFactory parameter', () => {
+      const clientFactory = new MockAppSheetClientFactory();
+      const tableFactory = new DynamicTableFactory(clientFactory, baseSchema);
+
+      const manager = new SchemaManager(clientFactory, baseSchema, tableFactory);
+
+      expect(manager).toBeInstanceOf(SchemaManager);
+    });
+
+    it('should use injected tableFactory when provided', () => {
+      const clientFactory = new MockAppSheetClientFactory();
+      const mockTable = {} as DynamicTable;
+      const customFactory: DynamicTableFactoryInterface = {
+        create: jest.fn().mockReturnValue(mockTable),
+      };
+
+      const manager = new SchemaManager(clientFactory, baseSchema, customFactory);
+      const result = manager.table('test-conn', 'users', 'user@example.com');
+
+      expect(customFactory.create).toHaveBeenCalledWith('test-conn', 'users', 'user@example.com');
+      expect(result).toBe(mockTable);
+    });
+
+    it('should create internal DynamicTableFactory when tableFactory is not provided', () => {
+      const clientFactory = new MockAppSheetClientFactory();
+
+      const manager = new SchemaManager(clientFactory, baseSchema);
+      const table = manager.table('test-conn', 'users', 'user@example.com');
+
+      // Internal factory creates real DynamicTable instances
+      expect(table).toBeInstanceOf(DynamicTable);
+      expect(table.getTableName()).toBe('extract_user');
+    });
+
+    it('should validate schema even when custom tableFactory is provided', () => {
+      const clientFactory = new MockAppSheetClientFactory();
+      const customFactory: DynamicTableFactoryInterface = {
+        create: jest.fn(),
+      };
+      const invalidSchema: SchemaConfig = {
+        connections: {
+          invalid: {
+            appId: '',
+            applicationAccessKey: 'key',
+            tables: {},
+          },
+        },
+      };
+
+      expect(() => new SchemaManager(clientFactory, invalidSchema, customFactory)).toThrow(
+        /Invalid schema/
+      );
     });
   });
 
@@ -273,7 +325,9 @@ describe('SchemaManager v3.0.0', () => {
       const table = manager.table<User>('test-conn', 'users', 'test@example.com');
 
       // Add
-      const added = await table.add([{ id: '1', email: 'alice@example.com', name: 'Alice', status: 'Active' }]);
+      const added = await table.add([
+        { id: '1', email: 'alice@example.com', name: 'Alice', status: 'Active' },
+      ]);
       expect(added).toHaveLength(1);
 
       // Find
@@ -292,7 +346,9 @@ describe('SchemaManager v3.0.0', () => {
       await table.add([{ id: '1', email: 'alice@example.com', status: 'Active' }]);
 
       // Update
-      const updated = await table.update([{ id: '1', email: 'alice.new@example.com', status: 'Active' }]);
+      const updated = await table.update([
+        { id: '1', email: 'alice.new@example.com', status: 'Active' },
+      ]);
       expect(updated[0].email).toBe('alice.new@example.com');
 
       // Delete

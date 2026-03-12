@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-03-12
+
+### Added
+
+- **Optional `tableFactory` parameter in SchemaManager constructor** (SOSO-451)
+  - New optional 3rd parameter: `tableFactory?: DynamicTableFactoryInterface`
+  - When provided, the injected factory is used instead of creating one internally
+  - Enables custom policies (e.g., `WriteConversionPolicy`, `UnknownFieldPolicy`) without unsafe property overrides
+  - When not provided, behavior is identical to v3.4.0 (fully backward compatible)
+  - Resolves OCP violation workaround in downstream MCP servers
+
 ## [3.1.0] - 2026-02-21
 
 ### Added
