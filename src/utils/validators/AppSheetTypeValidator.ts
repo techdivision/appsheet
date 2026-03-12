@@ -18,13 +18,20 @@ import { FormatValidator } from './FormatValidator';
  */
 export class AppSheetTypeValidator {
   /**
-   * Validate a field value against its AppSheet field type
+   * Validate a field value against its AppSheet field type.
+   *
+   * @param fieldName - Name of the field being validated
+   * @param fieldType - AppSheet field type
+   * @param value - Value to validate
+   * @param rowIndex - Row index for error messages
+   * @param locale - Optional BCP 47 locale tag for date/datetime format validation
    */
   static validate(
     fieldName: string,
     fieldType: AppSheetFieldType,
     value: any,
-    rowIndex: number
+    rowIndex: number,
+    locale?: string
   ): void {
     switch (fieldType) {
       // Core numeric types
@@ -56,7 +63,7 @@ export class AppSheetTypeValidator {
       case 'Date':
         if (BaseTypeValidator.validateDateValue(fieldName, value, rowIndex)) {
           if (typeof value === 'string') {
-            FormatValidator.validateDateFormat(fieldName, value, rowIndex);
+            FormatValidator.validateDateFormat(fieldName, value, rowIndex, locale);
           }
         }
         break;
@@ -65,7 +72,7 @@ export class AppSheetTypeValidator {
       case 'ChangeTimestamp':
         if (BaseTypeValidator.validateDateValue(fieldName, value, rowIndex)) {
           if (typeof value === 'string') {
-            FormatValidator.validateDateTimeFormat(fieldName, value, rowIndex);
+            FormatValidator.validateDateTimeFormat(fieldName, value, rowIndex, locale);
           }
         }
         break;
