@@ -1,15 +1,17 @@
 /**
- * Unknown Field Policy Interface
+ * Policy interfaces for DynamicTable behavior customization
  *
- * Defines how DynamicTable handles fields in row objects that are not
- * defined in the table schema. Implementations decide what happens:
- * ignore them, strip them, throw an error, or custom behavior.
+ * Defines injectable policies for:
+ * - Unknown field handling (strip, ignore, error)
+ * - Write value conversion (no-op, locale date formatting)
  *
- * Analog to SelectorBuilderInterface — injectable via DynamicTableFactory constructor.
+ * Both follow the Strategy Pattern, injectable via DynamicTable/DynamicTableFactory constructor.
  *
  * @module types
  * @category Types
  */
+
+import { FieldDefinition } from './schema';
 
 /**
  * Interface for handling fields in row objects that are not defined in the table schema.
@@ -53,5 +55,55 @@ export interface UnknownFieldPolicyInterface {
     tableName: string,
     rows: Partial<T>[],
     knownFields: string[]
+  ): Partial<T>[];
+}
+
+/**
+ * Interface for converting field values before sending to the AppSheet API.
+ *
+ * Implementations can convert values to locale-specific formats (e.g., ISO dates
+ * to locale dates), normalize values, or perform any other pre-write transformation.
+ *
+ * The policy is applied AFTER validation but BEFORE sending to the API,
+ * ensuring only valid values are converted.
+ *
+ * Analog to UnknownFieldPolicyInterface — injectable via DynamicTable/DynamicTableFactory constructor.
+ *
+ * @category Types
+ *
+ * @example
+ * ```typescript
+ * // Use built-in policies
+ * import { NoOpWriteConversionPolicy, LocaleWriteConversionPolicy } from '@techdivision/appsheet';
+ *
+ * // Or create a custom policy
+ * class CustomWriteConversionPolicy implements WriteConversionPolicyInterface {
+ *   apply<T extends Record<string, any>>(
+ *     tableName: string,
+ *     rows: Partial<T>[],
+ *     fields: Record<string, FieldDefinition>,
+ *     locale?: string
+ *   ): Partial<T>[] {
+ *     // Custom conversion logic here
+ *     return rows;
+ *   }
+ * }
+ * ```
+ */
+export interface WriteConversionPolicyInterface {
+  /**
+   * Convert field values in rows before sending to the AppSheet API.
+   *
+   * @param tableName - The AppSheet table name (for context)
+   * @param rows - The validated row objects to convert
+   * @param fields - Field definitions from the table schema (includes field types)
+   * @param locale - Optional BCP 47 locale tag for locale-aware conversion
+   * @returns Converted rows (may have transformed field values)
+   */
+  apply<T extends Record<string, any>>(
+    tableName: string,
+    rows: Partial<T>[],
+    fields: Record<string, FieldDefinition>,
+    locale?: string
   ): Partial<T>[];
 }

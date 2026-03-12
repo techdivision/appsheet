@@ -13,8 +13,9 @@ import {
   AppSheetClientFactoryInterface,
   SchemaConfig,
   UnknownFieldPolicyInterface,
+  WriteConversionPolicyInterface,
 } from '../types';
-import { StripUnknownFieldPolicy } from '../utils/policies';
+import { StripUnknownFieldPolicy, NoOpWriteConversionPolicy } from '../utils/policies';
 import { DynamicTable } from './DynamicTable';
 
 /**
@@ -30,12 +31,15 @@ import { DynamicTable } from './DynamicTable';
  *
  * @example
  * ```typescript
- * // Create factory with client factory and schema (default: StripUnknownFieldPolicy)
+ * // Create factory with client factory and schema (default policies)
  * const clientFactory = new AppSheetClientFactory();
  * const tableFactory = new DynamicTableFactory(clientFactory, schema);
  *
  * // Create factory with custom unknown field policy
  * const strictFactory = new DynamicTableFactory(clientFactory, schema, new ErrorUnknownFieldPolicy());
+ *
+ * // Create factory with locale write conversion
+ * const localeFactory = new DynamicTableFactory(clientFactory, schema, undefined, new LocaleWriteConversionPolicy());
  *
  * // Create table instances
  * const usersTable = tableFactory.create<User>('worklog', 'users', 'user@example.com');
@@ -49,6 +53,7 @@ import { DynamicTable } from './DynamicTable';
  */
 export class DynamicTableFactory implements DynamicTableFactoryInterface {
   private readonly unknownFieldPolicy: UnknownFieldPolicyInterface;
+  private readonly writeConversionPolicy: WriteConversionPolicyInterface;
 
   /**
    * Creates a new DynamicTableFactory.
@@ -56,13 +61,16 @@ export class DynamicTableFactory implements DynamicTableFactoryInterface {
    * @param clientFactory - Factory to create AppSheetClient instances
    * @param schema - Schema configuration with connection definitions
    * @param unknownFieldPolicy - Optional policy for handling unknown fields in DynamicTable (default: StripUnknownFieldPolicy)
+   * @param writeConversionPolicy - Optional policy for converting field values before write (default: NoOpWriteConversionPolicy)
    */
   constructor(
     private readonly clientFactory: AppSheetClientFactoryInterface,
     private readonly schema: SchemaConfig,
-    unknownFieldPolicy?: UnknownFieldPolicyInterface
+    unknownFieldPolicy?: UnknownFieldPolicyInterface,
+    writeConversionPolicy?: WriteConversionPolicyInterface
   ) {
     this.unknownFieldPolicy = unknownFieldPolicy ?? new StripUnknownFieldPolicy();
+    this.writeConversionPolicy = writeConversionPolicy ?? new NoOpWriteConversionPolicy();
   }
 
   /**
@@ -101,7 +109,17 @@ export class DynamicTableFactory implements DynamicTableFactoryInterface {
     // Get table definition (will throw if not found)
     const tableDef = client.getTable(tableName);
 
-    // Create and return DynamicTable with injected policy
-    return new DynamicTable<T>(client, tableDef, this.unknownFieldPolicy);
+    // Resolve locale cascade: table locale > connection locale > undefined
+    const effectiveLocale = tableDef.locale ?? connectionDef.locale ?? undefined;
+    const resolvedTableDef =
+      effectiveLocale !== tableDef.locale ? { ...tableDef, locale: effectiveLocale } : tableDef;
+
+    // Create and return DynamicTable with injected policies
+    return new DynamicTable<T>(
+      client,
+      resolvedTableDef,
+      this.unknownFieldPolicy,
+      this.writeConversionPolicy
+    );
   }
 }
