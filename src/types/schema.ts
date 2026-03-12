@@ -214,6 +214,18 @@ export interface TableInspectionResult {
   /** Discovered fields with AppSheet types */
   fields: Record<string, FieldDefinition>;
 
+  /**
+   * Auto-detected locale from date values in sample data (BCP 47 language tag).
+   *
+   * Determined by analyzing Date/DateTime/ChangeTimestamp field values
+   * for separator and part order patterns. When detection is ambiguous
+   * (all date parts <= 12), a default locale is assigned based on separator.
+   *
+   * @example 'de-DE' // detected from DD.MM.YYYY pattern
+   * @example 'en-US' // detected from MM/DD/YYYY pattern
+   */
+  locale?: string;
+
   /** Optional warning message */
   warning?: string;
 }
