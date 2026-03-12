@@ -6,7 +6,7 @@
 | ---------- | ------------------------------------------------------------- |
 | JIRA       | SOSO-440                                                      |
 | GitHub     | #17 (Enhancement)                                             |
-| Version    | v3.4.0 (geplant)                                              |
+| Version    | v3.3.0 (geplant, zusammen mit SOSO-439)                       |
 | Abhaengig  | SOSO-439 (Locale-aware Validation, in `develop`)              |
 | Betrifft   | DynamicTable, DynamicTableFactory, FormatValidator, Policies  |
 | Prioritaet | Mittel — funktioniert aktuell durch ISO-Toleranz von AppSheet |
@@ -420,6 +420,76 @@ export class DynamicTableFactory implements DynamicTableFactoryInterface {
 | `find()`    | Nein        | Lese-Operation, keine Werte gesendet       |
 | `findAll()` | Nein        | Lese-Operation                             |
 | `findOne()` | Nein        | Lese-Operation                             |
+
+---
+
+## Kritisches Szenario: Round-Trip (Lesen → Unveraendert Zurueckschreiben)
+
+Das haeufigste Szenario in der Praxis: Ein Record wird per `find()` gelesen und
+die Daten (inkl. Datumsfelder im Locale-Format) werden unveraendert per `update()`
+zurueckgeschrieben.
+
+```
+1. find()   → AppSheet gibt:  { date: "03/11/2026", status: "Done" }  (en-US)
+2. User aendert nur status:   { date: "03/11/2026", status: "Active" }
+3. update() → Validation:     "03/11/2026" ist gueltiges en-US Format  ✅ (SOSO-439)
+            → WriteConversion: "03/11/2026" ist NICHT ISO (kein YYYY-MM-DD Match)
+            → Pass through:    "03/11/2026" wird unveraendert gesendet  ✅
+            → AppSheet:        Empfaengt "03/11/2026" mit Locale "en-US"  ✅
+```
+
+### Warum das funktioniert
+
+Die `LocaleWriteConversionPolicy` konvertiert **ausschliesslich** ISO-formatierte
+Werte. Der ISO-Check ist ein strikter Regex:
+
+```typescript
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/; // Nur "YYYY-MM-DD"
+const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T/; // Nur "YYYY-MM-DDT..."
+```
+
+Alle Locale-Formate passieren diesen Check **nicht** und werden 1:1 durchgereicht:
+
+| Input (von AppSheet)   | ISO-Check | Ergebnis        |
+| ---------------------- | --------- | --------------- |
+| `03/11/2026`           | ❌ Nein   | Durchgereicht   |
+| `11.03.2026`           | ❌ Nein   | Durchgereicht   |
+| `2026/03/11`           | ❌ Nein   | Durchgereicht   |
+| `03/11/2026 21:51:24`  | ❌ Nein   | Durchgereicht   |
+| `11.03.2026 21:51:24`  | ❌ Nein   | Durchgereicht   |
+| `2026-03-12`           | ✅ Ja     | → Locale-Format |
+| `2026-03-12T14:30:00Z` | ✅ Ja     | → Locale-Format |
+
+### Test fuer Round-Trip
+
+```typescript
+describe('Round-trip: find() → update() with locale dates', () => {
+  it('should pass through locale-formatted dates unchanged (en-US)', () => {
+    const policy = new LocaleWriteConversionPolicy();
+    const fields = { date: { type: 'Date' }, name: { type: 'Text' } };
+    // Simulate data as returned by AppSheet find()
+    const rowsFromAppSheet = [{ date: '03/11/2026', name: 'Test' }];
+    const result = policy.apply('t', rowsFromAppSheet, fields, 'en-US');
+    expect(result[0].date).toBe('03/11/2026'); // Unchanged!
+  });
+
+  it('should pass through locale-formatted datetimes unchanged (de-DE)', () => {
+    const policy = new LocaleWriteConversionPolicy();
+    const fields = { created: { type: 'DateTime' } };
+    const rowsFromAppSheet = [{ created: '11.03.2026 21:51:24' }];
+    const result = policy.apply('t', rowsFromAppSheet, fields, 'de-DE');
+    expect(result[0].created).toBe('11.03.2026 21:51:24'); // Unchanged!
+  });
+
+  it('should pass through locale-formatted dates unchanged (ja-JP)', () => {
+    const policy = new LocaleWriteConversionPolicy();
+    const fields = { date: { type: 'Date' } };
+    const rowsFromAppSheet = [{ date: '2026/03/11' }];
+    const result = policy.apply('t', rowsFromAppSheet, fields, 'ja-JP');
+    expect(result[0].date).toBe('2026/03/11'); // Unchanged!
+  });
+});
+```
 
 ---
 
