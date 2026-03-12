@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import { AppSheetClient } from '../client';
 import { SchemaInspector } from './SchemaInspector';
 import { SchemaLoader } from '../utils';
-import { SchemaConfig, ConnectionDefinition } from '../types';
+import { SchemaConfig, ConnectionDefinition, TableDefinition } from '../types';
 
 /**
  * Create CLI program with all commands
@@ -16,10 +16,7 @@ import { SchemaConfig, ConnectionDefinition } from '../types';
 export function createCLI(): Command {
   const program = new Command();
 
-  program
-    .name('appsheet')
-    .description('AppSheet Schema Management CLI')
-    .version('0.1.0');
+  program.name('appsheet').description('AppSheet Schema Management CLI').version('0.1.0');
 
   // Command: init
   program
@@ -108,10 +105,18 @@ export function createCLI(): Command {
         fs.writeFileSync(options.output, output, 'utf-8');
         console.log(`\n✓ Schema generated: ${options.output}`);
         console.log('✓ Inspected tables:', tableNames.join(', '));
+        if (connection.locale) {
+          console.log(`✓ Locale detected: ${connection.locale}`);
+        }
         console.log('\nPlease review and update:');
         console.log('  - Key fields may need manual adjustment');
         console.log('  - Field types are inferred and may need refinement');
         console.log('  - Add required, enum, and description properties as needed');
+        if (!connection.locale) {
+          console.log(
+            '  - No locale detected. Consider adding locale manually for date validation.'
+          );
+        }
       } catch (error: any) {
         console.error('Error:', error.message);
         process.exit(1);
@@ -170,16 +175,30 @@ export function createCLI(): Command {
 
         // Add to schema
         const schemaName = inspector.toSchemaName(tableName);
-        schema.connections[connection].tables[schemaName] = {
+        const tableDef: TableDefinition = {
           tableName: inspection.tableName,
           keyField: inspection.keyField,
           fields: inspection.fields,
         };
 
+        // Propagate auto-detected locale
+        if (inspection.locale) {
+          tableDef.locale = inspection.locale;
+        }
+
+        schema.connections[connection].tables[schemaName] = tableDef;
+
+        if (inspection.warning) {
+          console.warn(`  Warning: ${inspection.warning}`);
+        }
+
         // Write back
         const output = yaml.stringify(schema);
         fs.writeFileSync(options.schema, output, 'utf-8');
         console.log(`✓ Table "${tableName}" added to connection "${connection}"`);
+        if (inspection.locale) {
+          console.log(`✓ Locale detected: ${inspection.locale}`);
+        }
       } catch (error: any) {
         console.error('Error:', error.message);
         process.exit(1);
