@@ -52,18 +52,27 @@ export class SchemaManager {
    *
    * @param clientFactory - Factory to create AppSheetClient instances
    * @param schema - Schema configuration containing connection and table definitions
+   * @param tableFactory - Optional pre-configured DynamicTableFactory.
+   *   When provided, this factory is used instead of creating a new one internally.
+   *   Use this to inject factories with custom policies (e.g., WriteConversionPolicy).
    * @throws {ValidationError} If the schema is invalid
    *
    * @example
    * ```typescript
+   * // Without custom factory (default behavior)
    * const factory = new AppSheetClientFactory();
    * const schema = SchemaLoader.fromYaml('./schema.yaml');
    * const db = new SchemaManager(factory, schema);
+   *
+   * // With custom factory (e.g., for locale-aware write conversion)
+   * const tableFactory = new DynamicTableFactory(factory, schema, undefined, writePolicy);
+   * const db = new SchemaManager(factory, schema, tableFactory);
    * ```
    */
   constructor(
     clientFactory: AppSheetClientFactoryInterface,
-    private readonly schema: SchemaConfig
+    private readonly schema: SchemaConfig,
+    tableFactory?: DynamicTableFactoryInterface
   ) {
     // Validate schema
     const validation = SchemaLoader.validate(schema);
@@ -74,8 +83,8 @@ export class SchemaManager {
       );
     }
 
-    // Create table factory using injected client factory
-    this.tableFactory = new DynamicTableFactory(clientFactory, schema);
+    // Use injected factory or create default
+    this.tableFactory = tableFactory ?? new DynamicTableFactory(clientFactory, schema);
   }
 
   /**
