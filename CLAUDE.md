@@ -124,9 +124,10 @@ npx appsheet inspect --help  # After npm install (uses bin entry)
 **SchemaManager** (`src/utils/SchemaManager.ts`)
 
 - Central management class using factory injection (v3.0.0)
-- **v3.0.0 Constructor**: `new SchemaManager(clientFactory, schema)`
+- **v3.0.0 Constructor**: `new SchemaManager(clientFactory, schema, tableFactory?)`
   - `clientFactory`: AppSheetClientFactoryInterface (use AppSheetClientFactory or MockAppSheetClientFactory)
   - `schema`: SchemaConfig from SchemaLoader
+  - `tableFactory` (optional): DynamicTableFactoryInterface — when provided, used instead of creating one internally. Enables custom policies (e.g., WriteConversionPolicy).
 - **`table<T>(connection, tableName, runAsUserEmail)`**: Creates DynamicTable instances on-the-fly
   - `runAsUserEmail` is required in v3.0.0 (not optional)
   - Each call creates a new client instance (lightweight operation)
@@ -367,6 +368,10 @@ await table.add([{ discount: 1.5 }]);
 const prodFactory = new AppSheetClientFactory();
 const prodDb = new SchemaManager(prodFactory, schema);
 
+// Production with custom policies: Inject pre-configured DynamicTableFactory
+const tableFactory = new DynamicTableFactory(prodFactory, schema, undefined, writePolicy);
+const prodDbWithPolicy = new SchemaManager(prodFactory, schema, tableFactory);
+
 // Testing: Use MockAppSheetClientFactory
 const testFactory = new MockAppSheetClientFactory(mockData);
 const testDb = new SchemaManager(testFactory, schema);
@@ -378,6 +383,7 @@ const testDb = new SchemaManager(testFactory, schema);
 - No need to mock axios or network calls
 - Test data can be pre-seeded via MockDataProvider
 - Same code paths for production and test environments
+- Custom DynamicTableFactory injection for policies (e.g., WriteConversionPolicy)
 
 ### Error Handling
 
