@@ -393,11 +393,18 @@ export class AppSheetClient implements AppSheetClientInterface {
   /**
    * Merge global properties with per-operation properties.
    * Per-operation properties take precedence over global config.
+   *
+   * Priority: operation properties > connection defaults
    */
   private mergeProperties(operationProperties?: RequestProperties): RequestProperties {
     const properties: RequestProperties = {
       RunAsUserEmail: this.runAsUserEmail,
     };
+
+    // Set connection-level locale as default (if configured)
+    if (this.connectionDef.locale) {
+      properties.Locale = this.connectionDef.locale;
+    }
 
     // Merge with operation-specific properties (takes precedence)
     if (operationProperties) {

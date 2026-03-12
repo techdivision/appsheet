@@ -4,9 +4,14 @@
  * @category Client
  */
 
-import { AppSheetClientInterface, TableDefinition, UnknownFieldPolicyInterface } from '../types';
+import {
+  AppSheetClientInterface,
+  TableDefinition,
+  UnknownFieldPolicyInterface,
+  WriteConversionPolicyInterface,
+} from '../types';
 import { AppSheetTypeValidator } from '../utils/validators';
-import { StripUnknownFieldPolicy } from '../utils/policies';
+import { StripUnknownFieldPolicy, NoOpWriteConversionPolicy } from '../utils/policies';
 
 /**
  * Table client with schema-based operations and runtime validation.
@@ -36,6 +41,7 @@ import { StripUnknownFieldPolicy } from '../utils/policies';
  */
 export class DynamicTable<T extends Record<string, any> = Record<string, any>> {
   private readonly unknownFieldPolicy: UnknownFieldPolicyInterface;
+  private readonly writeConversionPolicy: WriteConversionPolicyInterface;
 
   /**
    * Creates a new DynamicTable instance.
@@ -43,13 +49,16 @@ export class DynamicTable<T extends Record<string, any> = Record<string, any>> {
    * @param client - AppSheet client for API operations
    * @param definition - Table schema definition
    * @param unknownFieldPolicy - Optional policy for handling unknown fields (default: StripUnknownFieldPolicy)
+   * @param writeConversionPolicy - Optional policy for converting field values before write (default: NoOpWriteConversionPolicy)
    */
   constructor(
     private client: AppSheetClientInterface,
     private definition: TableDefinition,
-    unknownFieldPolicy?: UnknownFieldPolicyInterface
+    unknownFieldPolicy?: UnknownFieldPolicyInterface,
+    writeConversionPolicy?: WriteConversionPolicyInterface
   ) {
     this.unknownFieldPolicy = unknownFieldPolicy ?? new StripUnknownFieldPolicy();
+    this.writeConversionPolicy = writeConversionPolicy ?? new NoOpWriteConversionPolicy();
   }
 
   /**
@@ -169,9 +178,18 @@ export class DynamicTable<T extends Record<string, any> = Record<string, any>> {
     // Validate rows
     this.validateRows(processedRows);
 
+    // Apply write conversion (e.g., ISO dates → locale format)
+    const convertedRows = this.writeConversionPolicy.apply<T>(
+      this.definition.tableName,
+      processedRows,
+      this.definition.fields,
+      this.definition.locale
+    );
+
     const result = await this.client.add<T>({
       tableName: this.definition.tableName,
-      rows: processedRows as T[],
+      rows: convertedRows as T[],
+      properties: this.definition.locale ? { Locale: this.definition.locale } : undefined,
     });
     return result.rows;
   }
@@ -212,9 +230,18 @@ export class DynamicTable<T extends Record<string, any> = Record<string, any>> {
     // Validate rows
     this.validateRows(processedRows, false);
 
+    // Apply write conversion (e.g., ISO dates → locale format)
+    const convertedRows = this.writeConversionPolicy.apply<T>(
+      this.definition.tableName,
+      processedRows,
+      this.definition.fields,
+      this.definition.locale
+    );
+
     const result = await this.client.update<T>({
       tableName: this.definition.tableName,
-      rows: processedRows as T[],
+      rows: convertedRows as T[],
+      properties: this.definition.locale ? { Locale: this.definition.locale } : undefined,
     });
     return result.rows;
   }
@@ -347,8 +374,8 @@ export class DynamicTable<T extends Record<string, any> = Record<string, any>> {
           continue;
         }
 
-        // Type validation using AppSheetTypeValidator
-        AppSheetTypeValidator.validate(fieldName, fieldType, value, i);
+        // Type validation using AppSheetTypeValidator (with locale for date/datetime)
+        AppSheetTypeValidator.validate(fieldName, fieldType, value, i, this.definition.locale);
 
         // Enum/EnumList validation
         if (fieldDef.allowedValues) {
