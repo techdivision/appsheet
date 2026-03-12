@@ -4,6 +4,7 @@
 
 | Feld       | Wert                                                            |
 | ---------- | --------------------------------------------------------------- |
+| JIRA       | SOSO-446                                                        |
 | GitHub     | #19 (Enhancement)                                               |
 | Version    | v3.3.0 (zusammen mit SOSO-439 + SOSO-440)                       |
 | Abhaengig  | SOSO-439 (Locale-aware Validation), SOSO-440 (Write Conversion) |
