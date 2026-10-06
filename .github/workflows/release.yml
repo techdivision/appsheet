@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   release:
     name: Create Release
@@ -21,7 +25,8 @@ jobs:
         with:
           node-version: '20.x'
           cache: 'npm'
-          registry-url: 'https://registry.npmjs.org'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@techdivision'
 
       - name: Install dependencies
         run: npm ci
@@ -70,28 +75,27 @@ jobs:
             ## Installation
 
             ```bash
-            npm install git+ssh://git@github.com:techdivision/appsheet.git#${{ github.ref_name }}
+            echo "@techdivision:registry=https://npm.pkg.github.com" >> .npmrc
+            npm install @techdivision/appsheet@${{ steps.version.outputs.VERSION }}
             ```
           draft: false
           prerelease: ${{ contains(github.ref, '-alpha') || contains(github.ref, '-beta') || contains(github.ref, '-rc') }}
 
-      - name: Publish to npm
+      - name: Publish to GitHub Packages
         if: "!contains(github.ref, '-')"
-        run: npm publish --access public
+        run: npm publish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        continue-on-error: true
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish pre-release to npm
+      - name: Publish pre-release to GitHub Packages
         if: contains(github.ref, '-alpha') || contains(github.ref, '-beta') || contains(github.ref, '-rc')
         run: |
           if [[ "${{ github.ref }}" == *"-alpha"* ]]; then
-            npm publish --access public --tag alpha
+            npm publish --tag alpha
           elif [[ "${{ github.ref }}" == *"-beta"* ]]; then
-            npm publish --access public --tag beta
+            npm publish --tag beta
           elif [[ "${{ github.ref }}" == *"-rc"* ]]; then
-            npm publish --access public --tag rc
+            npm publish --tag rc
           fi
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        continue-on-error: true
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -36,8 +36,15 @@
     "typescript",
     "mcp"
   ],
-  "author": "",
+  "author": "TechDivision GmbH",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/techdivision/appsheet.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "devDependencies": {
     "@types/jest": "^29.0.0",
     "@types/node": "^20.0.0",
