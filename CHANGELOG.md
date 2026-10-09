@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-10-09
+
+### Added
+
+- **`retryAttempts` in `ConnectionDefinition`**
+  - Optional total number of attempts for read requests, including the first one (default `3`, `1` = no retry)
+  - Validated in the `AppSheetClient` constructor: must be an integer >= 1, otherwise a `ValidationError` is thrown
+  - Passed through `AppSheetClientFactory` unchanged, as the client receives the whole `ConnectionDefinition`
+
+### Changed
+
+- **BEHAVIOR CHANGE: `add`, `update` and `delete` are no longer retried automatically**
+  - Network errors, timeouts and 5xx responses on a mutation are now thrown immediately (as `NetworkError` / `AppSheetError`) after a single request
+  - Reason: mutations are not idempotent, so a retry after a lost response could create duplicate rows or apply a change twice
+  - There is no switch to restore the old behavior; callers that need a retry must implement it themselves with their own idempotency handling
+  - `find`, `findAll` and `findOne` keep retrying with exponential backoff (1 s, 2 s, ... max 10 s), now bounded by `retryAttempts` instead of a hardcoded 3
+- `AppSheetConfig.retryAttempts` (deprecated since 3.0.0) was never evaluated; its documentation now says so and points to `ConnectionDefinition.retryAttempts`
+
 ## [3.5.0] - 2026-03-12
 
 ### Added
