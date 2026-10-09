@@ -1,9 +1,10 @@
 /**
  * Test Suite: AppSheetClient - retry policy
  *
- * Verifies that only read access (Find) is retried and that mutations
- * (Add, Edit, Delete) are sent exactly once, because a repeated write after a
- * lost response could create duplicates or apply a change twice.
+ * Verifies that Find is always retried, that mutations keep being retried by
+ * default (no behavior change), and that retryWrites: false sends mutations
+ * exactly once, because a repeated write after a lost response could create
+ * duplicates or apply a change twice.
  *
  * @module tests/client
  */
@@ -40,7 +41,8 @@ function axiosError(options: { status?: number; code?: string; message?: string 
 }
 
 const serverError = () => axiosError({ status: 500 });
-const timeoutError = () => axiosError({ code: 'ECONNABORTED', message: 'timeout of 30000ms exceeded' });
+const timeoutError = () =>
+  axiosError({ code: 'ECONNABORTED', message: 'timeout of 30000ms exceeded' });
 const networkError = () => axiosError({ code: 'ECONNRESET', message: 'socket hang up' });
 
 function createClient(overrides: Partial<ConnectionDefinition> = {}): AppSheetClient {
@@ -57,7 +59,7 @@ describe('AppSheetClient - retry policy', () => {
     mockedAxios.isAxiosError.mockImplementation((e: any) => !!e && e.isAxiosError === true);
   });
 
-  describe('mutations are never retried', () => {
+  describe('retryWrites: false sends mutations exactly once', () => {
     const mutations: Array<[string, (client: AppSheetClient) => Promise<unknown>]> = [
       ['add', (c) => c.add({ tableName: 'T', rows: [{ a: 1 }] })],
       ['update', (c) => c.update({ tableName: 'T', rows: [{ id: '1' }] })],
@@ -73,7 +75,7 @@ describe('AppSheetClient - retry policy', () => {
       for (const [label, makeError, expectedType] of failures) {
         it(`sends ${operation} exactly once on ${label}`, async () => {
           mockAxiosInstance.post.mockRejectedValue(makeError());
-          const client = createClient({ retryAttempts: 5 });
+          const client = createClient({ retryAttempts: 5, retryWrites: false });
 
           await expect(run(client)).rejects.toBeInstanceOf(expectedType);
 
@@ -85,12 +87,51 @@ describe('AppSheetClient - retry policy', () => {
 
     it('keeps the converted API error for a failed mutation with status 500', async () => {
       mockAxiosInstance.post.mockRejectedValue(serverError());
-      const client = createClient();
+      const client = createClient({ retryWrites: false });
 
       await expect(client.add({ tableName: 'T', rows: [{}] })).rejects.toMatchObject({
         code: 'API_ERROR',
         statusCode: 500,
       });
+    });
+  });
+
+  describe('mutations are retried by default (unchanged behavior)', () => {
+    const mutations: Array<[string, (client: AppSheetClient) => Promise<unknown>]> = [
+      ['add', (c) => c.add({ tableName: 'T', rows: [{ a: 1 }] })],
+      ['update', (c) => c.update({ tableName: 'T', rows: [{ id: '1' }] })],
+      ['delete', (c) => c.delete({ tableName: 'T', rows: [{ id: '1' }] })],
+    ];
+
+    for (const [operation, run] of mutations) {
+      it(`retries ${operation} 3 times by default on HTTP 500`, async () => {
+        mockAxiosInstance.post.mockRejectedValue(serverError());
+        const client = createClient();
+
+        await expect(run(client)).rejects.toBeInstanceOf(AppSheetError);
+
+        expect(mockAxiosInstance.post).toHaveBeenCalledTimes(3);
+      });
+
+      it(`retries ${operation} up to retryAttempts when retryWrites is true`, async () => {
+        mockAxiosInstance.post.mockRejectedValue(timeoutError());
+        const client = createClient({ retryAttempts: 4, retryWrites: true });
+
+        await expect(run(client)).rejects.toBeInstanceOf(NetworkError);
+
+        expect(mockAxiosInstance.post).toHaveBeenCalledTimes(4);
+      });
+    }
+
+    it('does not retry a 4xx mutation even with retries enabled', async () => {
+      mockAxiosInstance.post.mockRejectedValue(axiosError({ status: 400 }));
+      const client = createClient();
+
+      await expect(client.add({ tableName: 'T', rows: [{}] })).rejects.toBeInstanceOf(
+        ValidationError
+      );
+
+      expect(mockAxiosInstance.post).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -146,6 +187,15 @@ describe('AppSheetClient - retry policy', () => {
       expect(mockAxiosInstance.post).toHaveBeenCalledTimes(2);
     });
 
+    it('still retries find when retryWrites is false', async () => {
+      mockAxiosInstance.post.mockRejectedValue(serverError());
+      const client = createClient({ retryWrites: false });
+
+      await expect(client.find({ tableName: 'T' })).rejects.toBeInstanceOf(AppSheetError);
+
+      expect(mockAxiosInstance.post).toHaveBeenCalledTimes(3);
+    });
+
     it('retries findAll and findOne as they use find internally', async () => {
       mockAxiosInstance.post.mockRejectedValue(serverError());
       const client = createClient({ retryAttempts: 2 });
@@ -180,6 +230,17 @@ describe('AppSheetClient - retry policy', () => {
 
     it.each([1, 3, 10])('accepts %p', (value) => {
       expect(() => createClient({ retryAttempts: value })).not.toThrow();
+    });
+  });
+
+  describe('retryWrites validation', () => {
+    it.each(['false', 0, 1, null])('rejects non-boolean %p', (value) => {
+      expect(() => createClient({ retryWrites: value as any })).toThrow(ValidationError);
+      expect(() => createClient({ retryWrites: value as any })).toThrow(/retryWrites/);
+    });
+
+    it.each([true, false])('accepts %p', (value) => {
+      expect(() => createClient({ retryWrites: value })).not.toThrow();
     });
   });
 });

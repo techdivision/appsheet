@@ -28,8 +28,8 @@ export interface AppSheetConfig {
   /**
    * Not evaluated by the client.
    *
-   * Retries are configured via `ConnectionDefinition.retryAttempts`, which only
-   * affects read requests (mutations are never retried).
+   * Retries are configured via `ConnectionDefinition.retryAttempts` and
+   * `ConnectionDefinition.retryWrites`.
    */
   retryAttempts?: number;
 

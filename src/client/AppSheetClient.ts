@@ -31,8 +31,8 @@ import { SelectorBuilder } from '../utils/SelectorBuilder';
 
 const DEFAULT_RETRY_ATTEMPTS = 3;
 
-/** Total attempts for requests that must be sent exactly once (mutations). */
-const RETRY_NEVER = 1;
+/** Total attempts for a request that must be sent exactly once. */
+const SINGLE_ATTEMPT = 1;
 
 /**
  * Validates the configured attempt count and applies the default.
@@ -47,6 +47,24 @@ function resolveRetryAttempts(configured: number | undefined): number {
   if (!Number.isInteger(configured) || configured < 1) {
     throw new ValidationError(
       `Invalid retryAttempts: expected an integer >= 1 (total attempts including the first), got ${String(configured)}`
+    );
+  }
+  return configured;
+}
+
+/**
+ * Validates the optional `retryWrites` flag.
+ *
+ * A truthy non-boolean (e.g. the string "false" from an env file) would silently
+ * keep write retries on, which is the opposite of what the caller meant.
+ */
+function resolveRetryWrites(configured: unknown): boolean {
+  if (configured === undefined) {
+    return true;
+  }
+  if (typeof configured !== 'boolean') {
+    throw new ValidationError(
+      `Invalid retryWrites: expected a boolean, got ${typeof configured} (${String(configured)})`
     );
   }
   return configured;
@@ -93,6 +111,7 @@ export class AppSheetClient implements AppSheetClientInterface {
   private readonly connectionDef: ConnectionDefinition;
   private readonly runAsUserEmail: string;
   private readonly retryAttempts: number;
+  private readonly retryWrites: boolean;
   private readonly selectorBuilder: SelectorBuilderInterface;
 
   /**
@@ -102,6 +121,7 @@ export class AppSheetClient implements AppSheetClientInterface {
    * @param runAsUserEmail - Email of the user to execute all operations as (required)
    * @param selectorBuilder - Optional custom SelectorBuilder for DI/AOP extensibility (defaults to SelectorBuilder)
    * @throws {ValidationError} If `connectionDef.retryAttempts` is not an integer >= 1
+   *   or `connectionDef.retryWrites` is not a boolean
    *
    * @example
    * ```typescript
@@ -123,6 +143,7 @@ export class AppSheetClient implements AppSheetClientInterface {
     this.connectionDef = connectionDef;
     this.runAsUserEmail = runAsUserEmail;
     this.retryAttempts = resolveRetryAttempts(connectionDef.retryAttempts);
+    this.retryWrites = resolveRetryWrites(connectionDef.retryWrites);
     this.selectorBuilder = selectorBuilder ?? new SelectorBuilder();
 
     // Apply defaults
@@ -143,7 +164,8 @@ export class AppSheetClient implements AppSheetClientInterface {
   /**
    * Add (Create) one or more rows to a table.
    *
-   * Sent exactly once: never retried automatically, see `ConnectionDefinition.retryAttempts`.
+   * Retried like Find unless `ConnectionDefinition.retryWrites` is `false`; see there
+   * for why disabling is recommended for mutations.
    *
    * @template T - The type of the rows being added
    * @param options - Options for the add operation
@@ -173,7 +195,7 @@ export class AppSheetClient implements AppSheetClientInterface {
       Rows: options.rows,
     };
 
-    const response = await this.request<ApiResponse<T>>(url, payload, RETRY_NEVER);
+    const response = await this.request<ApiResponse<T>>(url, payload, this.writeAttempts);
 
     return {
       rows: response.Rows || [],
@@ -234,7 +256,8 @@ export class AppSheetClient implements AppSheetClientInterface {
   /**
    * Update (Edit) one or more rows in a table.
    *
-   * Sent exactly once: never retried automatically, see `ConnectionDefinition.retryAttempts`.
+   * Retried like Find unless `ConnectionDefinition.retryWrites` is `false`; see there
+   * for why disabling is recommended for mutations.
    *
    * Rows must include the key field (primary key) to identify which row to update.
    *
@@ -266,7 +289,7 @@ export class AppSheetClient implements AppSheetClientInterface {
       Rows: options.rows,
     };
 
-    const response = await this.request<ApiResponse<T>>(url, payload, RETRY_NEVER);
+    const response = await this.request<ApiResponse<T>>(url, payload, this.writeAttempts);
 
     return {
       rows: response.Rows || [],
@@ -277,7 +300,8 @@ export class AppSheetClient implements AppSheetClientInterface {
   /**
    * Delete one or more rows from a table.
    *
-   * Sent exactly once: never retried automatically, see `ConnectionDefinition.retryAttempts`.
+   * Retried like Find unless `ConnectionDefinition.retryWrites` is `false`; see there
+   * for why disabling is recommended for mutations.
    *
    * Rows must include the key field (primary key) to identify which row to delete.
    *
@@ -309,7 +333,7 @@ export class AppSheetClient implements AppSheetClientInterface {
       Rows: options.rows,
     };
 
-    const response = await this.request<ApiResponse<T>>(url, payload, RETRY_NEVER);
+    const response = await this.request<ApiResponse<T>>(url, payload, this.writeAttempts);
 
     return {
       success: true,
@@ -450,9 +474,9 @@ export class AppSheetClient implements AppSheetClientInterface {
   /**
    * Execute request with retry logic and error handling.
    *
-   * The caller states the total attempts allowed instead of the client deciding
-   * globally: only Find is safe to repeat, while a repeated Add/Edit/Delete after a
-   * lost response could duplicate or double-apply a change.
+   * The caller states the total attempts allowed: Find is always safe to repeat,
+   * whereas a repeated Add/Edit/Delete after a lost response could duplicate or
+   * double-apply a change, so mutations may opt out via `retryWrites`.
    *
    * Handles both response formats from AppSheet API:
    * - Standard format: { Rows: [...], Warnings?: [...] }
@@ -498,6 +522,13 @@ export class AppSheetClient implements AppSheetClientInterface {
       // Re-throw unknown errors
       throw error;
     }
+  }
+
+  /**
+   * Total attempts for add/update/delete.
+   */
+  private get writeAttempts(): number {
+    return this.retryWrites ? this.retryAttempts : SINGLE_ATTEMPT;
   }
 
   /**
