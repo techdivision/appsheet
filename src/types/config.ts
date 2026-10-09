@@ -25,7 +25,12 @@ export interface AppSheetConfig {
   /** Request timeout in milliseconds (default: 30000) */
   timeout?: number;
 
-  /** Number of retry attempts for failed requests (default: 3) */
+  /**
+   * Not evaluated by the client.
+   *
+   * Retries are configured via `ConnectionDefinition.retryAttempts`, which only
+   * affects read requests (mutations are never retried).
+   */
   retryAttempts?: number;
 
   /** Optional email of user to run all operations as (can be overridden per operation) */

@@ -170,6 +170,21 @@ export interface ConnectionDefinition {
   /** Optional request timeout */
   timeout?: number;
 
+  /**
+   * Optional total number of attempts for read requests (Find), including the first one.
+   *
+   * Defaults to 3; `1` disables retries. Must be an integer >= 1, otherwise the
+   * client constructor throws a `ValidationError`.
+   *
+   * Applies to read access only (`find`, `findAll`, `findOne` and everything built
+   * on them). `add`, `update` and `delete` are never retried: they are not
+   * idempotent, and repeating one after a lost response could create duplicates or
+   * apply a change twice.
+   *
+   * @default 3
+   */
+  retryAttempts?: number;
+
   /** Optional global user email for all operations on this connection */
   runAsUserEmail?: string;
 

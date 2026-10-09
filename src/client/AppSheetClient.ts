@@ -29,6 +29,29 @@ import {
 } from '../types';
 import { SelectorBuilder } from '../utils/SelectorBuilder';
 
+const DEFAULT_RETRY_ATTEMPTS = 3;
+
+/** Total attempts for requests that must be sent exactly once (mutations). */
+const RETRY_NEVER = 1;
+
+/**
+ * Validates the configured attempt count and applies the default.
+ *
+ * Fails at construction time so that a misconfiguration surfaces immediately and
+ * not as a silently skipped request loop on the first call.
+ */
+function resolveRetryAttempts(configured: number | undefined): number {
+  if (configured === undefined) {
+    return DEFAULT_RETRY_ATTEMPTS;
+  }
+  if (!Number.isInteger(configured) || configured < 1) {
+    throw new ValidationError(
+      `Invalid retryAttempts: expected an integer >= 1 (total attempts including the first), got ${String(configured)}`
+    );
+  }
+  return configured;
+}
+
 /**
  * AppSheet API client for performing CRUD operations on AppSheet tables.
  *
@@ -78,6 +101,7 @@ export class AppSheetClient implements AppSheetClientInterface {
    * @param connectionDef - Full connection definition including app credentials and table schemas
    * @param runAsUserEmail - Email of the user to execute all operations as (required)
    * @param selectorBuilder - Optional custom SelectorBuilder for DI/AOP extensibility (defaults to SelectorBuilder)
+   * @throws {ValidationError} If `connectionDef.retryAttempts` is not an integer >= 1
    *
    * @example
    * ```typescript
@@ -98,7 +122,7 @@ export class AppSheetClient implements AppSheetClientInterface {
   ) {
     this.connectionDef = connectionDef;
     this.runAsUserEmail = runAsUserEmail;
-    this.retryAttempts = 3; // Default retry attempts
+    this.retryAttempts = resolveRetryAttempts(connectionDef.retryAttempts);
     this.selectorBuilder = selectorBuilder ?? new SelectorBuilder();
 
     // Apply defaults
@@ -118,6 +142,8 @@ export class AppSheetClient implements AppSheetClientInterface {
 
   /**
    * Add (Create) one or more rows to a table.
+   *
+   * Sent exactly once: never retried automatically, see `ConnectionDefinition.retryAttempts`.
    *
    * @template T - The type of the rows being added
    * @param options - Options for the add operation
@@ -147,7 +173,7 @@ export class AppSheetClient implements AppSheetClientInterface {
       Rows: options.rows,
     };
 
-    const response = await this.request<ApiResponse<T>>(url, payload);
+    const response = await this.request<ApiResponse<T>>(url, payload, RETRY_NEVER);
 
     return {
       rows: response.Rows || [],
@@ -157,6 +183,9 @@ export class AppSheetClient implements AppSheetClientInterface {
 
   /**
    * Find (Read) rows from a table with optional filtering.
+   *
+   * Network errors, timeouts and 5xx responses are retried up to
+   * `ConnectionDefinition.retryAttempts` total attempts (default 3).
    *
    * @template T - The type of the rows being retrieved
    * @param options - Options for the find operation
@@ -194,7 +223,7 @@ export class AppSheetClient implements AppSheetClientInterface {
       Rows: [],
     };
 
-    const response = await this.request<ApiResponse<T>>(url, payload);
+    const response = await this.request<ApiResponse<T>>(url, payload, this.retryAttempts);
 
     return {
       rows: response.Rows || [],
@@ -204,6 +233,8 @@ export class AppSheetClient implements AppSheetClientInterface {
 
   /**
    * Update (Edit) one or more rows in a table.
+   *
+   * Sent exactly once: never retried automatically, see `ConnectionDefinition.retryAttempts`.
    *
    * Rows must include the key field (primary key) to identify which row to update.
    *
@@ -235,7 +266,7 @@ export class AppSheetClient implements AppSheetClientInterface {
       Rows: options.rows,
     };
 
-    const response = await this.request<ApiResponse<T>>(url, payload);
+    const response = await this.request<ApiResponse<T>>(url, payload, RETRY_NEVER);
 
     return {
       rows: response.Rows || [],
@@ -245,6 +276,8 @@ export class AppSheetClient implements AppSheetClientInterface {
 
   /**
    * Delete one or more rows from a table.
+   *
+   * Sent exactly once: never retried automatically, see `ConnectionDefinition.retryAttempts`.
    *
    * Rows must include the key field (primary key) to identify which row to delete.
    *
@@ -276,7 +309,7 @@ export class AppSheetClient implements AppSheetClientInterface {
       Rows: options.rows,
     };
 
-    const response = await this.request<ApiResponse<T>>(url, payload);
+    const response = await this.request<ApiResponse<T>>(url, payload, RETRY_NEVER);
 
     return {
       success: true,
@@ -417,11 +450,20 @@ export class AppSheetClient implements AppSheetClientInterface {
   /**
    * Execute request with retry logic and error handling.
    *
+   * The caller states the total attempts allowed instead of the client deciding
+   * globally: only Find is safe to repeat, while a repeated Add/Edit/Delete after a
+   * lost response could duplicate or double-apply a change.
+   *
    * Handles both response formats from AppSheet API:
    * - Standard format: { Rows: [...], Warnings?: [...] }
    * - Direct array format: [...]
    */
-  private async request<T>(url: string, payload: any, attempt = 1): Promise<T> {
+  private async request<T>(
+    url: string,
+    payload: any,
+    maxAttempts: number,
+    attempt = 1
+  ): Promise<T> {
     try {
       const response = await this.axios.post<T>(url, payload);
 
@@ -440,13 +482,13 @@ export class AppSheetClient implements AppSheetClientInterface {
 
         // Retry on network errors or 5xx server errors
         if (
-          attempt < this.retryAttempts &&
+          attempt < maxAttempts &&
           (this.isRetryableError(axiosError) || this.isServerError(axiosError))
         ) {
           // Exponential backoff
           const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
           await this.sleep(delay);
-          return this.request<T>(url, payload, attempt + 1);
+          return this.request<T>(url, payload, maxAttempts, attempt + 1);
         }
 
         // Convert to appropriate error type
