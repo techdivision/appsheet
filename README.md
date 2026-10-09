@@ -170,6 +170,8 @@ Network errors, timeouts and 5xx responses are retried with exponential backoff 
 - `retryAttempts` - total attempts including the first one (default `3`, `1` = no retry, integer >= 1)
 - `retryWrites` - retry `add`, `update` and `delete` (default `true`, unchanged behavior). Mutations are not idempotent: a retry after a timeout or 5xx can write twice. Set `retryWrites: false` (recommended) to send mutations exactly once. `find` is always retried.
 
+In YAML/JSON schemas use literal values (`true`/`false`, numbers), not `${ENV}` placeholders: the schema loader delivers those as strings, which results in a `ValidationError`.
+
 ```typescript
 const connectionDef = {
   appId: '...',

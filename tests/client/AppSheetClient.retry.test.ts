@@ -123,6 +123,19 @@ describe('AppSheetClient - retry policy', () => {
       });
     }
 
+    it('backs off 1s and 2s between default write attempts', async () => {
+      mockAxiosInstance.post.mockRejectedValue(serverError());
+      const client = createClient();
+
+      await expect(client.add({ tableName: 'T', rows: [{}] })).rejects.toBeInstanceOf(
+        AppSheetError
+      );
+
+      expect((client as any).sleep).toHaveBeenCalledTimes(2);
+      expect((client as any).sleep).toHaveBeenNthCalledWith(1, 1000);
+      expect((client as any).sleep).toHaveBeenNthCalledWith(2, 2000);
+    });
+
     it('does not retry a 4xx mutation even with retries enabled', async () => {
       mockAxiosInstance.post.mockRejectedValue(axiosError({ status: 400 }));
       const client = createClient();
