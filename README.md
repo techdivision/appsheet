@@ -163,6 +163,23 @@ await client.updateOne('Users', { id: '123', name: 'John Updated' });
 await client.deleteOne('Users', { id: '123' });
 ```
 
+## Retries
+
+Network errors, timeouts and 5xx responses are retried with exponential backoff (1 s, 2 s, ... max 10 s). Both options live in the `ConnectionDefinition`:
+
+- `retryAttempts` - total attempts including the first one (default `3`, `1` = no retry, integer >= 1)
+- `retryWrites` - retry `add`, `update` and `delete` (default `true`, unchanged behavior). Mutations are not idempotent: a retry after a timeout or 5xx can write twice. Set `retryWrites: false` (recommended) to send mutations exactly once. `find` is always retried.
+
+```typescript
+const connectionDef = {
+  appId: '...',
+  applicationAccessKey: '...',
+  retryAttempts: 3,
+  retryWrites: false,
+  tables: { /* ... */ },
+};
+```
+
 ## Multi-Instance Support
 
 Manage multiple AppSheet apps in one project:
