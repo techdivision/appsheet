@@ -1,6 +1,6 @@
 {
   "name": "@techdivision/appsheet",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "description": "Generic TypeScript library for AppSheet CRUD operations",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -36,8 +36,15 @@
     "typescript",
     "mcp"
   ],
-  "author": "",
+  "author": "TechDivision GmbH",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/techdivision/appsheet.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "devDependencies": {
     "@types/jest": "^29.0.0",
     "@types/node": "^20.0.0",

@@ -395,7 +395,7 @@ All errors extend `AppSheetError` with specific subtypes:
 - `RateLimitError` (429)
 - `NetworkError` (no response)
 
-Retry logic applies to network errors and 5xx server errors (max 3 attempts by default).
+Retry logic applies to network errors, timeouts and 5xx server errors, up to `ConnectionDefinition.retryAttempts` total attempts (default 3, `1` = no retry). Mutations (`add`, `update`, `delete`) are retried by default as before; set `ConnectionDefinition.retryWrites: false` (recommended) to send them exactly once, since they are not idempotent and a retry after a timeout can write twice. Reads are always retried.
 
 ## AppSheet API Details
 
