@@ -170,6 +170,33 @@ export interface ConnectionDefinition {
   /** Optional request timeout */
   timeout?: number;
 
+  /**
+   * Optional total number of attempts per request, including the first one.
+   *
+   * Defaults to 3; `1` disables retries. Must be an integer >= 1, otherwise the
+   * client constructor throws a `ValidationError`. Applies to reads, and to
+   * mutations as long as {@link ConnectionDefinition.retryWrites} is not `false`.
+   *
+   * @default 3
+   */
+  retryAttempts?: number;
+
+  /**
+   * Optional switch for retrying mutations (`add`, `update`, `delete`).
+   *
+   * Defaults to `true`, which keeps the behavior of earlier versions. Reads (`find`
+   * and everything built on it) are always retried regardless of this flag.
+   *
+   * Mutations are not idempotent: if a request timed out or failed with 5xx after
+   * AppSheet had already processed it, a retry writes twice (duplicate rows, a
+   * change applied again). Setting `false` is therefore recommended for mutations;
+   * they are then sent exactly once and the error is thrown immediately. Must be a
+   * boolean, otherwise the client constructor throws a `ValidationError`.
+   *
+   * @default true
+   */
+  retryWrites?: boolean;
+
   /** Optional global user email for all operations on this connection */
   runAsUserEmail?: string;
 
